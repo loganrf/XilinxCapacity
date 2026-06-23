@@ -204,11 +204,16 @@ def parse_xdc_into(path, signals):
         if dm:
             toks = dm.group(1).split()
             for i in range(0, len(toks) - 1, 2):
-                props[toks[i].upper()] = toks[i + 1]
+                key = toks[i].upper()
+                props[key] = toks[i + 1]
+                if key == "PACKAGE_PIN":
+                    props["__file__"] = path
         else:
             pm = _SETPROP_RE.search(s)
             if pm:
                 props[pm.group(1).upper()] = pm.group(2)
+                if pm.group(1).upper() == "PACKAGE_PIN":
+                    props["__file__"] = path
 
 
 def parse_xdc(paths):
@@ -223,20 +228,27 @@ def parse_xdc(paths):
 
     used = {}
     loc_signals = {}  # loc -> ordered list of distinct signals on that pin
+    loc_files   = {}  # loc -> ordered list of distinct source xdc files
     for signal, props in signals.items():
         loc = props.get("PACKAGE_PIN")
         if not loc:
             continue
         loc = _clean_signal(loc).upper().rstrip(";")
         std = props.get("IOSTANDARD", "--")
+        src = props.get("__file__", "")
         sigs = loc_signals.setdefault(loc, [])
         if signal not in sigs:
             sigs.append(signal)
+        files = loc_files.setdefault(loc, [])
+        if src and src not in files:
+            files.append(src)
         if loc not in used:
-            used[loc] = {"signal": signal, "iostandard": std}
+            used[loc] = {"signal": signal, "iostandard": std, "file": src}
 
     collisions = {}
     for loc, sigs in loc_signals.items():
+        # The source file(s) that define this pin -- shown in the sidebar tooltip.
+        used[loc]["file"] = "; ".join(loc_files.get(loc, [])) or used[loc].get("file", "")
         if len(sigs) > 1:
             # More than one signal assigned to the same physical pin --
             # surface every conflicting signal in the detail view.
@@ -378,6 +390,13 @@ html, body {
     parts.append("""cc; }
 .pe { width: var(--cell); height: var(--cell); flex-shrink: 0; }
 body.show-lbl .pin { font-size: 6px; }
+.dv.sig { cursor: help; }
+#tip { position: fixed; z-index: 100; max-width: 360px; pointer-events: none;
+  background: #0b1220; border: 1px solid var(--accent); border-radius: 5px;
+  padding: 7px 9px; font-size: 11px; color: var(--text); line-height: 1.4;
+  box-shadow: 0 4px 14px rgba(0,0,0,.6); display: none; word-break: break-all; }
+#tip .tip-lbl { color: var(--accent); font-size: 9px; text-transform: uppercase;
+  letter-spacing: .07em; display: block; margin-bottom: 3px; }
 .pin.collision { border: 2px solid #ff3b30 !important;
   box-shadow: 0 0 8px #ff3b30, 0 0 3px #ff3b30 inset !important; }
 .pin.collision:hover, .pin.collision.hi { box-shadow: 0 0 14px #ff3b30 !important; }
@@ -401,6 +420,7 @@ body.show-lbl .pin { font-size: 6px; }
 </style>
 </head>
 <body>
+<div id="tip"></div>
 <div id="app">
 <div id="sb">
   <div class="sb-hd">
@@ -444,6 +464,7 @@ body.show-lbl .pin { font-size: 6px; }
     parts.append("""</h1>
     <label class="ck"><input type="checkbox" id="chk-dim"> Unused Pins Dimmed</label>
     <label class="ck"><input type="checkbox" id="chk-lbl"> Pin Labels</label>
+    <label class="ck"><input type="checkbox" id="chk-bank"> Bank Labels</label>
   </div>
   <div id="gs"><div id="grid"></div></div>
 </div>
@@ -474,6 +495,21 @@ var LABEL_MAP = {
   NC:'No-Connect', OTHER:'Other'
 };
 
+// Assign each distinct bank a unique label color. Hues are spread by the
+// golden angle so adjacent banks stay visually distinct.
+var BANK_COLORS = {};
+(function() {
+  var set = {};
+  Object.values(PKG).forEach(function(p){ if (p.bank && p.bank !== 'NA') set[p.bank] = 1; });
+  Object.keys(set).sort(function(a, b) {
+    var na = parseInt(a, 10), nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }).forEach(function(bank, i) {
+    BANK_COLORS[bank] = 'hsl(' + ((i * 137.5) % 360).toFixed(1) + ', 80%, 68%)';
+  });
+})();
+
 // Legend
 var usedKeys = {};
 Object.values(PKG).forEach(function(p){ usedKeys[p.color_key] = 1; });
@@ -495,9 +531,10 @@ if (!BANKS.length) {
     var pct = b.total ? (b.used / b.total * 100) : 0;
     var div = document.createElement('div');
     div.className = 'bk';
+    var bc = BANK_COLORS[b.bank] || 'var(--text)';
     div.innerHTML =
       '<div class="bk-top">' +
-        '<span class="bk-name">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span></span>' +
+        '<span class="bk-name" style="color:' + bc + '">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span></span>' +
         '<span class="bk-cnt"><b>' + b.used + '</b> / ' + b.total + ' (' + pct.toFixed(0) + '%)</span>' +
       '</div>' +
       '<div class="bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
@@ -550,10 +587,27 @@ function applyDim() {
   });
 }
 
-// Label toggle
-document.getElementById('chk-lbl').addEventListener('change', function(e) {
-  document.body.classList.toggle('show-lbl', e.target.checked);
-});
+// Label toggles -- pin location labels and per-bank colored bank labels.
+// When both are on, bank labels take precedence (one label fits per pin).
+var chkLbl  = document.getElementById('chk-lbl');
+var chkBank = document.getElementById('chk-bank');
+function applyLabels() {
+  var showPin = chkLbl.checked, showBank = chkBank.checked;
+  document.body.classList.toggle('show-lbl', showPin || showBank);
+  document.querySelectorAll('.pin').forEach(function(cell) {
+    var loc = cell.dataset.loc, d = PKG[loc];
+    if (showBank) {
+      var b = d.bank;
+      cell.textContent = (b && b !== 'NA') ? b : '';
+      cell.style.color = BANK_COLORS[b] || 'rgba(255,255,255,.75)';
+    } else {
+      cell.textContent = loc;
+      cell.style.color = '';
+    }
+  });
+}
+chkLbl.addEventListener('change', applyLabels);
+chkBank.addEventListener('change', applyLabels);
 
 // Detail panel
 var hiCell = null;
@@ -584,13 +638,47 @@ function showDetail(loc, cell) {
   }
   panel.innerHTML = rows.map(function(pair) {
     var label = pair[0], val = pair[1];
-    var cls = '';
-    if (label === 'Signal') cls = 'sig';
+    var cls = '', attr = '';
+    if (label === 'Signal') {
+      cls = 'sig';
+      if (used && used.file) attr = ' data-file="' + escAttr(used.file) + '"';
+    }
     else if (label.indexOf('Collision') !== -1) cls = 'warn';
     else if (val === 'NA' || val === '--') cls = 'na';
-    return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'">'+val+'</div></div>';
+    return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'"'+attr+'>'+val+'</div></div>';
   }).join('');
 }
+
+// Tooltip: hovering the signal name reveals the source .xdc file path(s).
+var tip = document.getElementById('tip');
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function positionTip(e) {
+  var x = e.clientX + 14, y = e.clientY + 16;
+  var w = tip.offsetWidth, h = tip.offsetHeight;
+  if (x + w > window.innerWidth  - 8) x = e.clientX - w - 14;
+  if (y + h > window.innerHeight - 8) y = e.clientY - h - 16;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+}
+panel.addEventListener('mouseover', function(e) {
+  var t = e.target.closest('[data-file]');
+  if (!t) return;
+  var f = t.getAttribute('data-file');
+  if (!f) return;
+  tip.innerHTML = '<span class="tip-lbl">XDC source</span>' +
+    f.split('; ').map(escAttr).join('<br>');
+  tip.style.display = 'block';
+  positionTip(e);
+});
+panel.addEventListener('mousemove', function(e) {
+  if (tip.style.display === 'block') positionTip(e);
+});
+panel.addEventListener('mouseout', function(e) {
+  if (e.target.closest('[data-file]')) tip.style.display = 'none';
+});
 function clearHi(cell) {
   cell.classList.remove('hi');
   if (hiCell === cell) hiCell = null;

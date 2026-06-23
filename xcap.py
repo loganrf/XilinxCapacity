@@ -3,10 +3,14 @@
 xcap.py -- Xilinx IO Capacity Visualization Tool
 
 Generates an interactive HTML pin map from an AMD/Xilinx package data file
-and a Vivado .xdc constraints file.
+and one or more Vivado .xdc constraints files.
+
+The constraints argument may be either a single .xdc file or a directory.
+If a directory is given, it is searched recursively for all .xdc files and
+their constraints are merged together.
 
 Usage:
-    python xcap.py <package_data.txt> <constraints.xdc> [output.html]
+    python xcap.py <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
 """
 
 import sys
@@ -74,26 +78,96 @@ def parse_package_data(path):
     return pins
 
 
-def parse_xdc(path):
-    used = {}
-    pin_re = re.compile(r"PACKAGE_PIN\s+(\S+)",             re.IGNORECASE)
-    std_re = re.compile(r"IOSTANDARD\s+(\S+)",              re.IGNORECASE)
-    sig_re = re.compile(r"\[get_ports\s*\{\s*([^}]+?)\s*\}", re.IGNORECASE)
+# Capture the get_ports argument: a braced {...} (may contain bus brackets),
+# a quoted "...", or a bare token (stops before whitespace or closing bracket).
+_GET_PORTS_RE = re.compile(
+    r"get_ports\s+(\{[^}]*\}|\"[^\"]*\"|[^\s\]]+)", re.IGNORECASE)
+_DICT_RE      = re.compile(r"-dict\s*\{([^}]*)\}",     re.IGNORECASE)
+_SETPROP_RE   = re.compile(
+    r"set_property\s+(?:-\w+\s+)*?([A-Za-z_]\w*)\s+(\S+)\s+\[get_ports", re.IGNORECASE)
+
+
+def collect_xdc_files(path):
+    """Return a list of .xdc files. If `path` is a directory, search it
+    recursively; otherwise return the single file."""
+    if os.path.isdir(path):
+        found = []
+        for root, _dirs, files in os.walk(path):
+            for fn in files:
+                if fn.lower().endswith(".xdc"):
+                    found.append(os.path.join(root, fn))
+        return sorted(found)
+    return [path]
+
+
+def _read_logical_lines(path):
+    """Yield logical lines, joining Tcl backslash line continuations."""
+    buf = ""
     with open(path, encoding="utf-8", errors="replace") as f:
         for raw in f:
-            line = raw.strip()
-            if line.startswith("#"):
+            line = raw.rstrip("\n")
+            if line.rstrip().endswith("\\"):
+                buf += line.rstrip()[:-1] + " "
                 continue
-            pm = pin_re.search(line)
-            if not pm:
-                continue
-            loc = pm.group(1).upper().rstrip(";")
-            std = std_re.search(line)
-            sig = sig_re.search(line)
-            used[loc] = {
-                "signal":     sig.group(1).strip() if sig else "--",
-                "iostandard": std.group(1)          if std else "--",
-            }
+            buf += line
+            yield buf
+            buf = ""
+    if buf:
+        yield buf
+
+
+def _clean_signal(token):
+    token = token.strip()
+    if token.startswith("{") and token.endswith("}"):
+        token = token[1:-1].strip()
+    return token.strip('"').strip()
+
+
+def parse_xdc_into(path, signals):
+    """Parse one .xdc file, accumulating set_property values per signal into
+    the `signals` dict. Handles properties spread across multiple
+    set_property lines for the same signal, as well as the -dict form."""
+    for line in _read_logical_lines(path):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if "set_property" not in s.lower():
+            continue
+        gm = _GET_PORTS_RE.search(s)
+        if not gm:
+            continue
+        signal = _clean_signal(gm.group(1))
+        props = signals.setdefault(signal, {})
+        dm = _DICT_RE.search(s)
+        if dm:
+            toks = dm.group(1).split()
+            for i in range(0, len(toks) - 1, 2):
+                props[toks[i].upper()] = toks[i + 1]
+        else:
+            pm = _SETPROP_RE.search(s)
+            if pm:
+                props[pm.group(1).upper()] = pm.group(2)
+
+
+def parse_xdc(paths):
+    """Parse one or more .xdc files and return a dict keyed by package pin
+    location: {loc: {"signal": ..., "iostandard": ...}}."""
+    signals = {}
+    for path in paths:
+        parse_xdc_into(path, signals)
+
+    used = {}
+    for signal, props in signals.items():
+        loc = props.get("PACKAGE_PIN")
+        if not loc:
+            continue
+        loc = _clean_signal(loc).upper().rstrip(";")
+        std = props.get("IOSTANDARD", "--")
+        if loc in used and used[loc]["signal"] != signal:
+            # More than one signal assigned to the same pin -- surface both.
+            used[loc]["signal"] += ", " + signal
+        else:
+            used[loc] = {"signal": signal, "iostandard": std}
     return used
 
 
@@ -108,7 +182,7 @@ def infer_grid(pins):
     return sorted(rows), sorted(cols)
 
 
-def generate_html(pkg_pins, used_pins, output_path, pkg_file, xdc_file):
+def generate_html(pkg_pins, used_pins, output_path, pkg_file, xdc_label):
     rows, cols = infer_grid(pkg_pins)
     io_types = {"HR", "HP", "HD"}
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in io_types)
@@ -122,7 +196,7 @@ def generate_html(pkg_pins, used_pins, output_path, pkg_file, xdc_file):
     js_cols   = json.dumps(cols)
     js_colors = json.dumps(PIN_COLORS)
     pkg_base  = os.path.basename(pkg_file)
-    xdc_base  = os.path.basename(xdc_file)
+    xdc_base  = xdc_label
 
     parts = []
     parts.append("""<!DOCTYPE html>
@@ -378,15 +452,30 @@ def main():
         sys.exit(1)
 
     pkg_file = sys.argv[1]
-    xdc_file = sys.argv[2]
+    xdc_path = sys.argv[2]
     out_file = sys.argv[3] if len(sys.argv) > 3 else "pinmap.html"
 
     print("Parsing package data : " + pkg_file)
     pkg_pins = parse_package_data(pkg_file)
     print("  -> " + str(len(pkg_pins)) + " pins loaded")
 
-    print("Parsing XDC          : " + xdc_file)
-    used_pins = parse_xdc(xdc_file)
+    xdc_files = collect_xdc_files(xdc_path)
+    if not xdc_files:
+        print("ERROR: no .xdc files found in '" + xdc_path + "'")
+        sys.exit(1)
+
+    if os.path.isdir(xdc_path):
+        print("Parsing XDC dir      : " + xdc_path +
+              " (" + str(len(xdc_files)) + " file(s))")
+        for p in xdc_files:
+            print("    - " + p)
+        xdc_label = os.path.basename(os.path.normpath(xdc_path)) + \
+            "/ (" + str(len(xdc_files)) + " files)"
+    else:
+        print("Parsing XDC          : " + xdc_path)
+        xdc_label = os.path.basename(xdc_path)
+
+    used_pins = parse_xdc(xdc_files)
     print("  -> " + str(len(used_pins)) + " assigned pins found")
 
     missing = [p for p in used_pins if p not in pkg_pins]
@@ -394,7 +483,7 @@ def main():
         print("  WARNING: " + str(len(missing)) + " XDC pin(s) not in package data: " + ", ".join(missing))
 
     print("Generating HTML      : " + out_file)
-    generate_html(pkg_pins, used_pins, out_file, pkg_file, xdc_file)
+    generate_html(pkg_pins, used_pins, out_file, pkg_file, xdc_label)
 
     io_types = {"HR", "HP", "HD"}
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in io_types)

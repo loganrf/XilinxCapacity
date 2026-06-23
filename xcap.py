@@ -33,9 +33,16 @@ USED_BORDER  = "#FFD700"
 DIMMED_COLOR = "#2a2a2a"
 
 
+# I/O types that represent actual programmable-logic (PL) SelectIO on the
+# device. These are the only pins counted toward I/O capacity -- PS pins
+# (PSMIO/PSDDR/PSGTR/PSCONFIG), gigabit transceivers (GTH/GTR/GTY), power
+# (GND/VCC), and config/JTAG are deliberately excluded.
+PL_IO_TYPES = ("HR", "HP", "HD")
+
+
 def classify_pin(pin_name, io_type):
     n = pin_name.upper()
-    if io_type in ("HR", "HP", "HD"):
+    if io_type in PL_IO_TYPES:
         return io_type
     if io_type == "CONFIG":
         return "CONFIG"
@@ -48,32 +55,87 @@ def classify_pin(pin_name, io_type):
     return "OTHER"
 
 
+# The package data files for different device families use different column
+# layouts (e.g. 7-series has VCCAUX Group / No-Connect columns that
+# UltraScale+ omits, and the I/O Type / SLR columns swap order). Rather than
+# hardcoding column indices, the header row is parsed to map each column
+# position to a known field. Phrases are ordered longest-first so that, e.g.,
+# "Pin Name" is matched before the bare "Pin" location column.
+_HEADER_PATTERNS = [
+    (re.compile(r"Pin\s+Name", re.IGNORECASE),           "name"),
+    (re.compile(r"Memory\s+Byte\s+Group", re.IGNORECASE), "byte_group"),
+    (re.compile(r"Byte\s+Group", re.IGNORECASE),         "byte_group"),
+    (re.compile(r"VCCAUX\s+Group", re.IGNORECASE),       "vccaux"),
+    (re.compile(r"Super\s+Logic\s+Region", re.IGNORECASE), "slr"),
+    (re.compile(r"I/O\s+Type", re.IGNORECASE),           "io_type"),
+    (re.compile(r"No[-\s]*Connect", re.IGNORECASE),      "no_connect"),
+    (re.compile(r"Bank", re.IGNORECASE),                 "bank"),
+    (re.compile(r"Pin", re.IGNORECASE),                  "loc"),
+]
+
+
+def parse_header_columns(header):
+    """Map the package-data header row to an ordered list of field names,
+    one entry per whitespace-separated data column (None for unrecognized
+    columns)."""
+    cols = []
+    i, n = 0, len(header)
+    while i < n:
+        if header[i].isspace():
+            i += 1
+            continue
+        for pat, field in _HEADER_PATTERNS:
+            m = pat.match(header, i)
+            if m:
+                cols.append(field)
+                i = m.end()
+                break
+        else:
+            j = i
+            while j < n and not header[j].isspace():
+                j += 1
+            cols.append(None)
+            i = j
+    return cols
+
+
 def parse_package_data(path):
     pins = {}
+    columns = None
     with open(path, encoding="utf-8", errors="replace") as f:
         for raw in f:
             s = raw.strip()
-            if not s or s.startswith("#"):
+            if not s or s.startswith("#") or s.startswith("--"):
                 continue
-            if s.startswith("Pin") and "Pin Name" in s:
+            if "Pin Name" in s and re.match(r"\s*pin\b", s, re.IGNORECASE):
+                columns = parse_header_columns(s)
                 continue
             if s.startswith("Total Number"):
                 continue
             parts = s.split()
             if len(parts) < 2:
                 continue
-            loc, pin_name = parts[0], parts[1]
-            def _f(i, default="NA", _p=parts):
-                return _p[i] if len(_p) > i else default
+            if columns:
+                rec = {}
+                for idx, field in enumerate(columns):
+                    if field and idx < len(parts):
+                        rec[field] = parts[idx]
+                loc      = rec.get("loc", parts[0])
+                pin_name = rec.get("name", parts[1])
+            else:
+                # No header seen yet -- fall back to positional defaults.
+                rec, loc, pin_name = {}, parts[0], parts[1]
+            def _g(field, _r=rec):
+                return _r.get(field, "NA")
             pins[loc] = {
                 "name":       pin_name,
-                "byte_group": _f(2),
-                "bank":       _f(3),
-                "vccaux":     _f(4),
-                "slr":        _f(5),
-                "io_type":    _f(6),
-                "no_connect": _f(7),
-                "color_key":  classify_pin(pin_name, _f(6)),
+                "byte_group": _g("byte_group"),
+                "bank":       _g("bank"),
+                "vccaux":     _g("vccaux"),
+                "slr":        _g("slr"),
+                "io_type":    _g("io_type"),
+                "no_connect": _g("no_connect"),
+                "color_key":  classify_pin(pin_name, _g("io_type")),
             }
     return pins
 
@@ -150,25 +212,37 @@ def parse_xdc_into(path, signals):
 
 
 def parse_xdc(paths):
-    """Parse one or more .xdc files and return a dict keyed by package pin
-    location: {loc: {"signal": ..., "iostandard": ...}}."""
+    """Parse one or more .xdc files and return ``(used, collisions)`` where
+    ``used`` is a dict keyed by package pin location
+    ``{loc: {"signal": ..., "iostandard": ...}}`` and ``collisions`` is a dict
+    ``{loc: [signal, ...]}`` listing every pin assigned to more than one
+    distinct signal (a conflicting / colliding assignment)."""
     signals = {}
     for path in paths:
         parse_xdc_into(path, signals)
 
     used = {}
+    loc_signals = {}  # loc -> ordered list of distinct signals on that pin
     for signal, props in signals.items():
         loc = props.get("PACKAGE_PIN")
         if not loc:
             continue
         loc = _clean_signal(loc).upper().rstrip(";")
         std = props.get("IOSTANDARD", "--")
-        if loc in used and used[loc]["signal"] != signal:
-            # More than one signal assigned to the same pin -- surface both.
-            used[loc]["signal"] += ", " + signal
-        else:
+        sigs = loc_signals.setdefault(loc, [])
+        if signal not in sigs:
+            sigs.append(signal)
+        if loc not in used:
             used[loc] = {"signal": signal, "iostandard": std}
-    return used
+
+    collisions = {}
+    for loc, sigs in loc_signals.items():
+        if len(sigs) > 1:
+            # More than one signal assigned to the same physical pin --
+            # surface every conflicting signal in the detail view.
+            used[loc]["signal"] = ", ".join(sigs)
+            collisions[loc] = sigs
+    return used, collisions
 
 
 def _row_key(label):
@@ -189,16 +263,40 @@ def infer_grid(pins):
     return sorted(rows, key=_row_key), sorted(cols)
 
 
-def generate_html(pkg_pins, used_pins, output_path, pkg_file, xdc_label):
+def compute_bank_utilization(pkg_pins, used_pins):
+    """Return a list of per-bank PL I/O utilization records, sorted by bank,
+    e.g. ``[{"bank": "47", "io_type": "HD", "total": 26, "used": 4}, ...]``.
+    Only PL SelectIO banks (HR/HP/HD) are included."""
+    banks = {}
+    for loc, d in pkg_pins.items():
+        if d["color_key"] not in PL_IO_TYPES:
+            continue
+        bank = d["bank"]
+        entry = banks.setdefault(bank, {"bank": bank, "io_type": d["color_key"],
+                                        "total": 0, "used": 0})
+        entry["total"] += 1
+        if loc in used_pins:
+            entry["used"] += 1
+
+    def _bank_key(rec):
+        b = rec["bank"]
+        return (0, int(b)) if b.isdigit() else (1, b)
+
+    return sorted(banks.values(), key=_bank_key)
+
+
+def generate_html(pkg_pins, used_pins, collisions, bank_util,
+                  output_path, pkg_file, xdc_label):
     rows, cols = infer_grid(pkg_pins)
-    io_types = {"HR", "HP", "HD"}
-    n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in io_types)
+    n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)
     n_used = sum(1 for p, d in pkg_pins.items()
-                 if d["color_key"] in io_types and p in used_pins)
+                 if d["color_key"] in PL_IO_TYPES and p in used_pins)
     pct = "{:.1f}".format(n_used / n_io * 100) if n_io else "0.0"
 
     js_pkg    = json.dumps(pkg_pins,  ensure_ascii=False)
     js_used   = json.dumps(used_pins, ensure_ascii=False)
+    js_coll   = json.dumps(collisions, ensure_ascii=False)
+    js_banks  = json.dumps(bank_util, ensure_ascii=False)
     js_rows   = json.dumps(rows)
     js_cols   = json.dumps(cols)
     js_colors = json.dumps(PIN_COLORS)
@@ -280,6 +378,26 @@ html, body {
     parts.append("""cc; }
 .pe { width: var(--cell); height: var(--cell); flex-shrink: 0; }
 body.show-lbl .pin { font-size: 6px; }
+.pin.collision { border: 2px solid #ff3b30 !important;
+  box-shadow: 0 0 8px #ff3b30, 0 0 3px #ff3b30 inset !important; }
+.pin.collision:hover, .pin.collision.hi { box-shadow: 0 0 14px #ff3b30 !important; }
+.sw-coll { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px solid #ff3b30; }
+.dv.warn { color: #ff3b30; font-weight: 700; }
+#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 230px;
+  overflow-y: auto; }
+#banks h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 8px; }
+.bk { margin-bottom: 7px; font-size: 11px; }
+.bk-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.bk-name { color: var(--text); font-weight: 600; }
+.bk-name .tag { color: var(--muted); font-weight: 400; margin-left: 5px; }
+.bk-cnt { color: var(--muted); }
+.bk-cnt b { color: var(--text); }
+.bar { height: 5px; border-radius: 3px; background: #374151; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: """)
+    parts.append(USED_BORDER)
+    parts.append("""; }
 </style>
 </head>
 <body>
@@ -294,19 +412,29 @@ body.show-lbl .pin { font-size: 6px; }
     parts.append("""</div>
   </div>
   <div id="detail"><p class="ph">Hover over a pin</p></div>
+  <div id="banks">
+    <h3>PL I/O Utilization by Bank</h3>
+    <div id="bank-list"></div>
+  </div>
   <div id="stats">
-    I/O used: <b>""")
+    PL I/O used: <b>""")
     parts.append(str(n_used))
     parts.append("</b> / <b>")
     parts.append(str(n_io))
     parts.append("</b> &nbsp;(<b>")
     parts.append(pct)
-    parts.append("""%</b>)
+    parts.append("%</b>)")
+    if collisions:
+        parts.append("<br>&#9888; <b style=\"color:#ff3b30\">")
+        parts.append(str(len(collisions)))
+        parts.append("</b> pin collision(s)")
+    parts.append("""
   </div>
   <div id="legend">
     <h3>Legend</h3>
     <div id="leg"></div>
     <div class="leg"><div class="sw-used"></div> Assigned in XDC</div>
+    <div class="leg"><div class="sw-coll"></div> Pin collision</div>
   </div>
 </div>
 <div id="main">
@@ -326,6 +454,10 @@ var PKG    = """)
     parts.append(js_pkg)
     parts.append(";\nvar USED   = ")
     parts.append(js_used)
+    parts.append(";\nvar COLL   = ")
+    parts.append(js_coll)
+    parts.append(";\nvar BANKS  = ")
+    parts.append(js_banks)
     parts.append(";\nvar ROWS   = ")
     parts.append(js_rows)
     parts.append(";\nvar COLS   = ")
@@ -354,6 +486,25 @@ Object.keys(COLORS).forEach(function(key) {
   legEl.appendChild(d);
 });
 
+// PL I/O utilization by bank
+var bankListEl = document.getElementById('bank-list');
+if (!BANKS.length) {
+  bankListEl.innerHTML = '<p class="ph">No PL I/O banks found</p>';
+} else {
+  BANKS.forEach(function(b) {
+    var pct = b.total ? (b.used / b.total * 100) : 0;
+    var div = document.createElement('div');
+    div.className = 'bk';
+    div.innerHTML =
+      '<div class="bk-top">' +
+        '<span class="bk-name">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span></span>' +
+        '<span class="bk-cnt"><b>' + b.used + '</b> / ' + b.total + ' (' + pct.toFixed(0) + '%)</span>' +
+      '</div>' +
+      '<div class="bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
+    bankListEl.appendChild(div);
+  });
+}
+
 // Build grid
 var grid = document.getElementById('grid');
 var hdr = mk('div','gr');
@@ -369,8 +520,9 @@ ROWS.forEach(function(r) {
     var data = PKG[loc];
     if (!data) { row.appendChild(mk('div','pe')); return; }
     var isUsed = !!USED[loc];
+    var isColl = !!COLL[loc];
     var color  = COLORS[data.color_key] || COLORS['OTHER'];
-    var cell   = mk('div','pin'+(isUsed?' used':''),loc);
+    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':''),loc);
     cell.style.background = color;
     cell.dataset.loc = loc;
     cell.addEventListener('mouseenter', (function(l,c){ return function(){ showDetail(l,c); }; })(loc,cell));
@@ -426,10 +578,15 @@ function showDetail(loc, cell) {
     rows.push(['Signal',      used.signal]);
     rows.push(['IO Standard', used.iostandard]);
   }
+  var coll = COLL[loc];
+  if (coll) {
+    rows.push(['⚠ Collision', coll.length + ' signals on this pin: ' + coll.join(', ')]);
+  }
   panel.innerHTML = rows.map(function(pair) {
     var label = pair[0], val = pair[1];
     var cls = '';
     if (label === 'Signal') cls = 'sig';
+    else if (label.indexOf('Collision') !== -1) cls = 'warn';
     else if (val === 'NA' || val === '--') cls = 'na';
     return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'">'+val+'</div></div>';
   }).join('');
@@ -482,23 +639,36 @@ def main():
         print("Parsing XDC          : " + xdc_path)
         xdc_label = os.path.basename(xdc_path)
 
-    used_pins = parse_xdc(xdc_files)
+    used_pins, collisions = parse_xdc(xdc_files)
     print("  -> " + str(len(used_pins)) + " assigned pins found")
 
     missing = [p for p in used_pins if p not in pkg_pins]
     if missing:
         print("  WARNING: " + str(len(missing)) + " XDC pin(s) not in package data: " + ", ".join(missing))
 
-    print("Generating HTML      : " + out_file)
-    generate_html(pkg_pins, used_pins, out_file, pkg_file, xdc_label)
+    if collisions:
+        print("  WARNING: " + str(len(collisions)) +
+              " pin collision(s) detected -- conflicting pin assignments:")
+        for loc in sorted(collisions):
+            print("    - " + loc + ": " + ", ".join(collisions[loc]))
 
-    io_types = {"HR", "HP", "HD"}
-    n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in io_types)
+    bank_util = compute_bank_utilization(pkg_pins, used_pins)
+
+    print("Generating HTML      : " + out_file)
+    generate_html(pkg_pins, used_pins, collisions, bank_util,
+                  out_file, pkg_file, xdc_label)
+
+    n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)
     n_used = sum(1 for p, d in pkg_pins.items()
-                 if d["color_key"] in io_types and p in used_pins)
+                 if d["color_key"] in PL_IO_TYPES and p in used_pins)
     if n_io:
-        print("  I/O capacity used  : " + str(n_used) + "/" + str(n_io) +
+        print("  PL I/O capacity used : " + str(n_used) + "/" + str(n_io) +
               " (" + "{:.1f}".format(n_used/n_io*100) + "%)")
+        print("  PL I/O by bank:")
+        for b in bank_util:
+            bpct = b["used"] / b["total"] * 100 if b["total"] else 0.0
+            print("    - Bank {0:>4} ({1}): {2}/{3} ({4:.1f}%)".format(
+                b["bank"], b["io_type"], b["used"], b["total"], bpct))
     print("Done.")
 
 

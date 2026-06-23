@@ -171,6 +171,13 @@ def parse_xdc(paths):
     return used
 
 
+def _row_key(label):
+    # BGA row labels run A..Z, then AA, AB, ... -- so shorter labels sort
+    # first, and labels of equal length sort alphabetically. Plain string
+    # sorting would wrongly place "AA" right after "A".
+    return (len(label), label)
+
+
 def infer_grid(pins):
     rows, cols = set(), set()
     pat = re.compile(r"^([A-Z]+)(\d+)$")
@@ -179,7 +186,7 @@ def infer_grid(pins):
         if m:
             rows.add(m.group(1))
             cols.add(int(m.group(2)))
-    return sorted(rows), sorted(cols)
+    return sorted(rows, key=_row_key), sorted(cols)
 
 
 def generate_html(pkg_pins, used_pins, output_path, pkg_file, xdc_label):

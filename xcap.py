@@ -297,7 +297,68 @@ def compute_bank_utilization(pkg_pins, used_pins):
     return sorted(banks.values(), key=_bank_key)
 
 
-def generate_html(pkg_pins, used_pins, collisions, bank_util,
+# Explicit VCCO requirements (volts) for IOSTANDARDs whose name does not encode
+# the voltage. Everything else is derived from the trailing digits of the name
+# (e.g. LVCMOS33 -> 3.3, SSTL135 -> 1.35) by ``iostandard_vcco``.
+_VCCO_EXPLICIT = {
+    "LVTTL":   3.3,
+    "PCI33_3": 3.3,
+    "LVDS_25": 2.5,
+    "MINI_LVDS_25": 2.5,
+    "RSDS_25": 2.5,
+    "BLVDS_25": 2.5,
+    "TMDS_33": 3.3,
+    "PPDS_25": 2.5,
+}
+
+
+def iostandard_vcco(iostd):
+    """Best-effort map of an IOSTANDARD to the VCCO bank voltage it requires,
+    in volts, or ``None`` if it cannot be determined (e.g. bare ``LVDS``, which
+    is voltage-flexible). Used to flag banks whose assigned signals demand
+    conflicting VCCO rails -- a real Vivado DRC error (NSTD/IOSTANDARD)."""
+    if not iostd:
+        return None
+    s = iostd.strip().upper().strip('"{}')
+    if s in ("--", "NA", ""):
+        return None
+    if s in _VCCO_EXPLICIT:
+        return _VCCO_EXPLICIT[s]
+    # Differential SSTL/HSTL etc. share the single-ended voltage encoding.
+    m = re.search(r"(\d{2,3})(?!.*\d)", s)
+    if not m:
+        return None
+    digits = m.group(1)
+    if len(digits) == 3:          # 135 -> 1.35, 150 -> 1.50
+        return int(digits) / 100.0
+    return int(digits) / 10.0     # 33 -> 3.3, 25 -> 2.5, 18 -> 1.8
+
+
+def compute_bank_voltage_conflicts(pkg_pins, used_pins):
+    """Return ``{bank: {"voltages": {volt: [signal,...]}, "io_type": ...}}`` for
+    every PL I/O bank that has assigned signals demanding two or more distinct,
+    determinable VCCO voltages. Such a bank cannot be routed -- a single bank
+    has one VCCO rail."""
+    by_bank = {}
+    for loc, used in used_pins.items():
+        d = pkg_pins.get(loc)
+        if not d or d["color_key"] not in PL_IO_TYPES:
+            continue
+        v = iostandard_vcco(used.get("iostandard"))
+        if v is None:
+            continue
+        bank = d["bank"]
+        rec = by_bank.setdefault(bank, {"io_type": d["color_key"], "voltages": {}})
+        rec["voltages"].setdefault("{:.2f}".format(v), []).append(used.get("signal"))
+
+    conflicts = {}
+    for bank, rec in by_bank.items():
+        if len(rec["voltages"]) > 1:
+            conflicts[bank] = rec
+    return conflicts
+
+
+def generate_html(pkg_pins, used_pins, collisions, bank_util, vcco_conflicts,
                   output_path, pkg_file, xdc_label):
     rows, cols = infer_grid(pkg_pins)
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)
@@ -309,6 +370,7 @@ def generate_html(pkg_pins, used_pins, collisions, bank_util,
     js_used   = json.dumps(used_pins, ensure_ascii=False)
     js_coll   = json.dumps(collisions, ensure_ascii=False)
     js_banks  = json.dumps(bank_util, ensure_ascii=False)
+    js_vcco   = json.dumps(vcco_conflicts, ensure_ascii=False)
     js_rows   = json.dumps(rows)
     js_cols   = json.dumps(cols)
     js_colors = json.dumps(PIN_COLORS)
@@ -417,6 +479,63 @@ body.show-lbl .pin { font-size: 6px; }
 .bar > span { display: block; height: 100%; background: """)
     parts.append(USED_BORDER)
     parts.append("""; }
+
+/* --- Search bar --- */
+#search-wrap { position: relative; display: flex; align-items: center; }
+#search { width: 210px; background: #111827; border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 5px 26px 5px 28px; font-size: 12px;
+  outline: none; transition: border-color .12s; }
+#search:focus { border-color: var(--accent); }
+#search-wrap .ico { position: absolute; left: 9px; font-size: 12px; color: var(--muted); pointer-events: none; }
+#search-clear { position: absolute; right: 7px; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; display: none; user-select: none; }
+#search-clear:hover { color: var(--text); }
+#search-count { font-size: 11px; color: var(--accent); min-width: 64px; }
+
+/* search filtering: non-matching pins fade back */
+.pin.nomatch { opacity: .12 !important; filter: grayscale(1); }
+.pin.match { box-shadow: 0 0 0 2px var(--accent), 0 0 9px var(--accent) !important; z-index: 5; }
+
+/* class-hidden pins (legend toggles) */
+.pin.classoff { opacity: .08 !important; filter: grayscale(1); pointer-events: none; }
+
+/* locked (clicked) selection */
+.pin.sel { transform: scale(1.45); z-index: 25;
+  box-shadow: 0 0 0 3px #fff, 0 0 12px rgba(255,255,255,.8) !important; }
+/* differential-pair partner of the selected pin */
+.pin.diffpair { box-shadow: 0 0 0 2px #22d3ee, 0 0 10px #22d3ee !important; z-index: 6; }
+/* pins belonging to a bank highlighted from the bank list */
+.pin.bankhi { box-shadow: 0 0 0 2px #a78bfa, 0 0 9px #a78bfa !important; z-index: 4; }
+
+.leg.clickable { cursor: pointer; border-radius: 4px; padding: 1px 3px; margin-left: -3px;
+  transition: background .1s; }
+.leg.clickable:hover { background: #ffffff10; }
+.leg.off { opacity: .4; text-decoration: line-through; }
+
+.bk.clickable { cursor: pointer; border-radius: 4px; padding: 3px 4px; margin: 0 -4px 7px; transition: background .1s; }
+.bk.clickable:hover { background: #ffffff0d; }
+.bk.bank-active { background: #a78bfa22; box-shadow: inset 0 0 0 1px #a78bfa66; }
+
+#detail.locked { box-shadow: inset 0 0 0 2px #ffffff22; }
+.lock-banner { display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #fff;
+  background: #ffffff14; border-radius: 4px; padding: 4px 7px; margin-bottom: 9px; }
+.lock-banner .x { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; }
+.lock-banner .x:hover { color: #fff; }
+
+.copyable { cursor: copy; }
+.copyable:hover { text-decoration: underline dotted; }
+.copied-flash { color: var(--accent) !important; }
+
+.btn { background: #111827; border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; transition: border-color .12s, background .12s; }
+.btn:hover { border-color: var(--accent); background: #1b2533; }
+
+.dv.warn.volt { color: #fbbf24; }
+.sw-volt { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px solid #fbbf24; }
+.bk-warn { color: #fbbf24; font-weight: 700; margin-left: 5px; cursor: help; }
 </style>
 </head>
 <body>
@@ -448,6 +567,10 @@ body.show-lbl .pin { font-size: 6px; }
         parts.append("<br>&#9888; <b style=\"color:#ff3b30\">")
         parts.append(str(len(collisions)))
         parts.append("</b> pin collision(s)")
+    if vcco_conflicts:
+        parts.append("<br>&#9888; <b style=\"color:#fbbf24\">")
+        parts.append(str(len(vcco_conflicts)))
+        parts.append("</b> bank VCCO conflict(s)")
     parts.append("""
   </div>
   <div id="legend">
@@ -455,6 +578,8 @@ body.show-lbl .pin { font-size: 6px; }
     <div id="leg"></div>
     <div class="leg"><div class="sw-used"></div> Assigned in XDC</div>
     <div class="leg"><div class="sw-coll"></div> Pin collision</div>
+    <div class="leg"><div class="sw-volt"></div> Bank VCCO conflict</div>
+    <div class="leg" style="color:var(--muted);margin-top:6px;font-size:10px">Click a swatch to hide/show that type</div>
   </div>
 </div>
 <div id="main">
@@ -462,9 +587,16 @@ body.show-lbl .pin { font-size: 6px; }
     <h1>&#128204; """)
     parts.append(pkg_base)
     parts.append("""</h1>
+    <div id="search-wrap">
+      <span class="ico">&#128269;</span>
+      <input type="text" id="search" placeholder="Search pin, signal, bank, IO std" autocomplete="off" spellcheck="false">
+      <span id="search-clear" title="Clear search">&times;</span>
+    </div>
+    <span id="search-count"></span>
     <label class="ck"><input type="checkbox" id="chk-dim"> Unused Pins Dimmed</label>
     <label class="ck"><input type="checkbox" id="chk-lbl"> Pin Labels</label>
     <label class="ck"><input type="checkbox" id="chk-bank"> Bank Labels</label>
+    <button class="btn" id="btn-export" title="Download pin assignments &amp; bank utilization as CSV">&#11015; Export CSV</button>
   </div>
   <div id="gs"><div id="grid"></div></div>
 </div>
@@ -479,6 +611,8 @@ var PKG    = """)
     parts.append(js_coll)
     parts.append(";\nvar BANKS  = ")
     parts.append(js_banks)
+    parts.append(";\nvar VCCO   = ")
+    parts.append(js_vcco)
     parts.append(";\nvar ROWS   = ")
     parts.append(js_rows)
     parts.append(";\nvar COLS   = ")
@@ -510,17 +644,30 @@ var BANK_COLORS = {};
   });
 })();
 
-// Legend
+// Legend -- each swatch toggles visibility of that pin class in the grid.
 var usedKeys = {};
 Object.values(PKG).forEach(function(p){ usedKeys[p.color_key] = 1; });
+var hiddenClasses = {};   // color_key -> true when hidden
 var legEl = document.getElementById('leg');
 Object.keys(COLORS).forEach(function(key) {
   if (!usedKeys[key]) return;
   var d = document.createElement('div');
-  d.className = 'leg';
+  d.className = 'leg clickable';
+  d.dataset.key = key;
   d.innerHTML = '<div class="sw" style="background:' + COLORS[key] + '"></div><span>' + (LABEL_MAP[key] || key) + '</span>';
+  d.addEventListener('click', function() {
+    if (hiddenClasses[key]) { delete hiddenClasses[key]; d.classList.remove('off'); }
+    else { hiddenClasses[key] = true; d.classList.add('off'); }
+    applyClassVisibility();
+  });
   legEl.appendChild(d);
 });
+function applyClassVisibility() {
+  document.querySelectorAll('.pin').forEach(function(cell) {
+    var d = PKG[cell.dataset.loc];
+    cell.classList.toggle('classoff', !!hiddenClasses[d.color_key]);
+  });
+}
 
 // PL I/O utilization by bank
 var bankListEl = document.getElementById('bank-list');
@@ -530,16 +677,40 @@ if (!BANKS.length) {
   BANKS.forEach(function(b) {
     var pct = b.total ? (b.used / b.total * 100) : 0;
     var div = document.createElement('div');
-    div.className = 'bk';
+    div.className = 'bk clickable';
+    div.dataset.bank = b.bank;
     var bc = BANK_COLORS[b.bank] || 'var(--text)';
+    var warn = '';
+    if (VCCO[b.bank]) {
+      var volts = Object.keys(VCCO[b.bank].voltages).map(function(v){ return v + 'V'; }).join(' vs ');
+      warn = '<span class="bk-warn" title="VCCO conflict: ' + volts + '">&#9888;</span>';
+    }
     div.innerHTML =
       '<div class="bk-top">' +
-        '<span class="bk-name" style="color:' + bc + '">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span></span>' +
+        '<span class="bk-name" style="color:' + bc + '">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span>' + warn + '</span>' +
         '<span class="bk-cnt"><b>' + b.used + '</b> / ' + b.total + ' (' + pct.toFixed(0) + '%)</span>' +
       '</div>' +
       '<div class="bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
+    div.addEventListener('click', function() { toggleBankHighlight(b.bank, div); });
     bankListEl.appendChild(div);
   });
+}
+
+// Highlight every pin in a bank when its row in the utilization list is clicked.
+var activeBank = null;
+function toggleBankHighlight(bank, div) {
+  var turningOn = activeBank !== bank;
+  document.querySelectorAll('.bk.bank-active').forEach(function(e){ e.classList.remove('bank-active'); });
+  document.querySelectorAll('.pin.bankhi').forEach(function(e){ e.classList.remove('bankhi'); });
+  if (turningOn) {
+    activeBank = bank;
+    div.classList.add('bank-active');
+    document.querySelectorAll('.pin').forEach(function(cell) {
+      if (PKG[cell.dataset.loc].bank === bank) cell.classList.add('bankhi');
+    });
+  } else {
+    activeBank = null;
+  }
 }
 
 // Build grid
@@ -562,8 +733,9 @@ ROWS.forEach(function(r) {
     var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':''),loc);
     cell.style.background = color;
     cell.dataset.loc = loc;
-    cell.addEventListener('mouseenter', (function(l,c){ return function(){ showDetail(l,c); }; })(loc,cell));
-    cell.addEventListener('mouseleave', (function(c){ return function(){ clearHi(c); }; })(cell));
+    cell.addEventListener('mouseenter', (function(l,c){ return function(){ if (!locked) showDetail(l,c,false); }; })(loc,cell));
+    cell.addEventListener('mouseleave', (function(c){ return function(){ if (!locked) clearHi(c); }; })(cell));
+    cell.addEventListener('click', (function(l,c){ return function(ev){ ev.stopPropagation(); lockPin(l,c); }; })(loc,cell));
     row.appendChild(cell);
   });
   grid.appendChild(row);
@@ -609,13 +781,42 @@ function applyLabels() {
 chkLbl.addEventListener('change', applyLabels);
 chkBank.addEventListener('change', applyLabels);
 
+// Differential-pair partner map: link each L##P pin to its L##N sibling in the
+// same bank (Xilinx names them e.g. IO_L13P_T2_... / IO_L13N_T2_...).
+var DIFF_PARTNER = {};
+(function() {
+  var groups = {};
+  Object.keys(PKG).forEach(function(loc) {
+    var nm = (PKG[loc].name || '').toUpperCase();
+    var m = nm.match(/_L(\d+)(P|N)_/) || nm.match(/^L(\d+)(P|N)/);
+    if (!m) return;
+    var key = PKG[loc].bank + '|' + m[1];
+    (groups[key] = groups[key] || {})[m[2]] = loc;
+  });
+  Object.keys(groups).forEach(function(k) {
+    var g = groups[k];
+    if (g.P && g.N) { DIFF_PARTNER[g.P] = g.N; DIFF_PARTNER[g.N] = g.P; }
+  });
+})();
+
 // Detail panel
 var hiCell = null;
+var locked = false;       // true while a pin is click-locked
+var lockedLoc = null;
 var panel = document.getElementById('detail');
-function showDetail(loc, cell) {
+function showDetail(loc, cell, isLocked) {
   if (hiCell) hiCell.classList.remove('hi');
   hiCell = cell;
   cell.classList.add('hi');
+
+  // Highlight the differential-pair partner, if any.
+  document.querySelectorAll('.pin.diffpair').forEach(function(e){ e.classList.remove('diffpair'); });
+  var partner = DIFF_PARTNER[loc];
+  if (partner) {
+    var pc = document.querySelector('.pin[data-loc="' + partner + '"]');
+    if (pc) pc.classList.add('diffpair');
+  }
+
   var d    = PKG[loc] || {};
   var used = USED[loc];
   var rows = [
@@ -628,6 +829,9 @@ function showDetail(loc, cell) {
     ['SLR',        d.slr        || '--'],
     ['No-Connect', d.no_connect || '--']
   ];
+  if (partner) {
+    rows.push(['Diff Pair', partner + '  (' + (PKG[partner].name || '') + ')']);
+  }
   if (used) {
     rows.push(['Signal',      used.signal]);
     rows.push(['IO Standard', used.iostandard]);
@@ -636,18 +840,140 @@ function showDetail(loc, cell) {
   if (coll) {
     rows.push(['⚠ Collision', coll.length + ' signals on this pin: ' + coll.join(', ')]);
   }
-  panel.innerHTML = rows.map(function(pair) {
+  var vc = used ? VCCO[d.bank] : null;
+  if (vc) {
+    var volts = Object.keys(vc.voltages).map(function(v){ return v + 'V'; }).join(', ');
+    rows.push(['⚠ VCCO Conflict', 'Bank ' + d.bank + ' has signals needing ' + volts + ' — one bank can supply only one VCCO.']);
+  }
+
+  var banner = isLocked
+    ? '<div class="lock-banner"><span>📌 Locked — ' + escAttr(loc) + '</span><span class="x" id="unlock">&times;</span></div>'
+    : '';
+  panel.innerHTML = banner + rows.map(function(pair) {
     var label = pair[0], val = pair[1];
     var cls = '', attr = '';
     if (label === 'Signal') {
-      cls = 'sig';
-      if (used && used.file) attr = ' data-file="' + escAttr(used.file) + '"';
+      cls = 'sig copyable';
+      attr = ' data-copy="' + escAttr(val) + '"';
+      if (used && used.file) attr += ' data-file="' + escAttr(used.file) + '"';
     }
+    else if (label === 'Pin' || label === 'Pin Name') { cls = 'copyable'; attr = ' data-copy="' + escAttr(val) + '"'; }
     else if (label.indexOf('Collision') !== -1) cls = 'warn';
+    else if (label.indexOf('VCCO') !== -1) cls = 'warn volt';
     else if (val === 'NA' || val === '--') cls = 'na';
     return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'"'+attr+'>'+val+'</div></div>';
   }).join('');
+
+  if (isLocked) {
+    var ub = document.getElementById('unlock');
+    if (ub) ub.addEventListener('click', function(ev){ ev.stopPropagation(); unlockPin(); });
+  }
 }
+
+// Click a pin to lock its details so they persist while the mouse moves away.
+// Clicking the same pin again (or the background, or Escape) unlocks.
+function lockPin(loc, cell) {
+  if (locked && lockedLoc === loc) { unlockPin(); return; }
+  if (lockedCell) lockedCell.classList.remove('sel');
+  locked = true; lockedLoc = loc; lockedCell = cell;
+  cell.classList.add('sel');
+  panel.classList.add('locked');
+  showDetail(loc, cell, true);
+}
+var lockedCell = null;
+function unlockPin() {
+  locked = false; lockedLoc = null;
+  if (lockedCell) { lockedCell.classList.remove('sel'); lockedCell.classList.remove('hi'); }
+  lockedCell = null;
+  panel.classList.remove('locked');
+  document.querySelectorAll('.pin.diffpair').forEach(function(e){ e.classList.remove('diffpair'); });
+  panel.innerHTML = '<p class="ph">Hover over a pin</p>';
+  if (hiCell) { hiCell.classList.remove('hi'); hiCell = null; }
+}
+// Click empty grid space to clear a lock.
+document.getElementById('gs').addEventListener('click', function(){ if (locked) unlockPin(); });
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') { if (locked) unlockPin(); var s = document.getElementById('search'); if (s.value) { s.value=''; runSearch(); } }
+});
+
+// Click-to-copy for pin / signal fields.
+panel.addEventListener('click', function(e) {
+  var t = e.target.closest('[data-copy]');
+  if (!t) return;
+  var txt = t.getAttribute('data-copy');
+  var done = function(){ var o = t.textContent; t.classList.add('copied-flash'); t.textContent = '✓ copied'; setTimeout(function(){ t.textContent = o; t.classList.remove('copied-flash'); }, 850); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
+  else done();
+});
+
+// --- Search / filter: match pins by location, signal, bank, pin name, or
+// IO standard. Matches are ringed; everything else fades back. ---
+var searchEl = document.getElementById('search');
+var searchClear = document.getElementById('search-clear');
+var searchCount = document.getElementById('search-count');
+function runSearch() {
+  var q = searchEl.value.trim().toLowerCase();
+  searchClear.style.display = q ? 'block' : 'none';
+  var pins = document.querySelectorAll('.pin');
+  if (!q) {
+    searchCount.textContent = '';
+    pins.forEach(function(c){ c.classList.remove('match'); c.classList.remove('nomatch'); });
+    return;
+  }
+  var n = 0;
+  pins.forEach(function(cell) {
+    var loc = cell.dataset.loc, d = PKG[loc], u = USED[loc];
+    var hay = [loc, d.name, d.bank, d.io_type, d.byte_group,
+               u ? u.signal : '', u ? u.iostandard : ''].join(' ').toLowerCase();
+    if (hay.indexOf(q) !== -1) { cell.classList.add('match'); cell.classList.remove('nomatch'); n++; }
+    else { cell.classList.remove('match'); cell.classList.add('nomatch'); }
+  });
+  searchCount.textContent = n + ' match' + (n === 1 ? '' : 'es');
+}
+searchEl.addEventListener('input', runSearch);
+searchClear.addEventListener('click', function(){ searchEl.value=''; runSearch(); searchEl.focus(); });
+
+// --- CSV export: assigned pins + per-bank utilization, downloaded client-side. ---
+function csvCell(v) {
+  v = (v === undefined || v === null) ? '' : String(v);
+  return /[",\\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function exportCSV() {
+  var lines = [];
+  lines.push('# Assigned pins');
+  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','XDC File'].map(csvCell).join(','));
+  Object.keys(USED).sort().forEach(function(loc) {
+    var d = PKG[loc] || {}, u = USED[loc];
+    var vc = VCCO[d.bank] ? 'YES' : '';
+    lines.push([loc, d.name, d.bank, d.io_type, u.signal, u.iostandard,
+                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc, u.file].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push('# Bank utilization (PL I/O)');
+  lines.push(['Bank','I/O Type','Used','Total','Percent','VCCO Conflict'].map(csvCell).join(','));
+  BANKS.forEach(function(b) {
+    var pct = b.total ? (b.used / b.total * 100).toFixed(1) : '0.0';
+    lines.push([b.bank, b.io_type, b.used, b.total, pct, VCCO[b.bank] ? 'YES' : ''].map(csvCell).join(','));
+  });
+  var blob = new Blob([lines.join('\\n')], {type: 'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'pinmap_report.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+// Mirror of Python's iostandard_vcco for the CSV's VCCO column.
+function iostdVcco(s) {
+  if (!s) return '';
+  s = s.toUpperCase().replace(/["{}]/g, '').trim();
+  var explicit = {LVTTL:'3.3',PCI33_3:'3.3',LVDS_25:'2.5',MINI_LVDS_25:'2.5',RSDS_25:'2.5',BLVDS_25:'2.5',TMDS_33:'3.3',PPDS_25:'2.5'};
+  if (explicit[s]) return explicit[s];
+  var m = s.match(/(\d{2,3})(?!.*\d)/);
+  if (!m) return '';
+  var dg = m[1];
+  return (dg.length === 3 ? (parseInt(dg,10)/100) : (parseInt(dg,10)/10)).toFixed(2);
+}
+document.getElementById('btn-export').addEventListener('click', exportCSV);
 
 // Tooltip: hovering the signal name reveals the source .xdc file path(s).
 var tip = document.getElementById('tip');
@@ -741,9 +1067,17 @@ def main():
             print("    - " + loc + ": " + ", ".join(collisions[loc]))
 
     bank_util = compute_bank_utilization(pkg_pins, used_pins)
+    vcco_conflicts = compute_bank_voltage_conflicts(pkg_pins, used_pins)
+
+    if vcco_conflicts:
+        print("  WARNING: " + str(len(vcco_conflicts)) +
+              " bank VCCO conflict(s) detected -- incompatible IOSTANDARD voltages in one bank:")
+        for bank in sorted(vcco_conflicts):
+            volts = ", ".join(v + "V" for v in sorted(vcco_conflicts[bank]["voltages"]))
+            print("    - Bank " + bank + ": " + volts)
 
     print("Generating HTML      : " + out_file)
-    generate_html(pkg_pins, used_pins, collisions, bank_util,
+    generate_html(pkg_pins, used_pins, collisions, bank_util, vcco_conflicts,
                   out_file, pkg_file, xdc_label)
 
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)

@@ -1,0 +1,5 @@
+include LICENSE
+include README.md
+include pyproject.toml
+# Sample/reference data shipped for convenience (not required at runtime).
+recursive-include package_data *.txt

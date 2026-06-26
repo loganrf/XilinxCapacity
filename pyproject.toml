@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xilinx-capacity"
+version = "1.0.0"
+description = "Xilinx/AMD FPGA IO capacity visualization tool — generates an interactive HTML pin map from a package data file and Vivado .xdc constraints."
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "LICENSE" }
+authors = [{ name = "Logan", email = "logan@sige.dev" }]
+keywords = ["xilinx", "amd", "fpga", "vivado", "xdc", "pinout", "io", "visualization"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Utilities",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/loganrf/XilinxCapacity"
+Repository = "https://github.com/loganrf/XilinxCapacity"
+Issues = "https://github.com/loganrf/XilinxCapacity/issues"
+
+# Installs an `xcap` command on the user's PATH that runs xcap.py's main().
+[project.scripts]
+xcap = "xcap:main"
+
+[tool.setuptools]
+# The tool is a single top-level module (xcap.py) rather than a package.
+py-modules = ["xcap"]

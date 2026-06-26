@@ -4,11 +4,61 @@ This script can be used to synthesize an interactive pin map of your AMD/Xilinx 
 
 The script generates a html webpage in the output directory that can be opened with your browser (chrome recommended). This HTML page consists of two sections: the lefthand sidebar and main display. The main display shows the pinout diagram (note: this tool assumes a uniform square pinout structure with letter codes indicating rows and numbers indicating columns).
 
+## Installation
+
+Installing the package puts an `xcap` command on your `PATH`, so you can run the
+tool from any directory without needing a copy of `xcap.py`.
+
+**Install directly from this repository (no clone needed):**
+
+```
+pip install git+https://github.com/loganrf/XilinxCapacity.git
+```
+
+**Install a released wheel** (attached to each [GitHub Release](https://github.com/loganrf/XilinxCapacity/releases)):
+
+```
+pip install xilinx_capacity-<version>-py3-none-any.whl
+```
+
+If/when the package is published to PyPI you can also `pip install xilinx-capacity`.
+
+To install from a local clone:
+
+```
+git clone https://github.com/loganrf/XilinxCapacity.git
+cd XilinxCapacity
+pip install .          # add -e for an editable/development install
+```
+
+> Tip: `pipx install git+https://github.com/loganrf/XilinxCapacity.git` installs
+> the command into an isolated environment while keeping it on your `PATH`.
+
+### Running without installing
+
+From a source checkout you can use the bundled wrapper script directly — add the
+`bin/` directory to your `PATH` (or symlink `bin/xcap` somewhere on it):
+
+```
+export PATH="$PWD/bin:$PATH"
+xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+```
+
 ## Usage
+
+Once installed, invoke the tool as a terminal command from anywhere:
+
+```
+xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+```
+
+Or, running directly from a source checkout:
 
 ```
 python xcap.py <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
 ```
+
+Use `xcap --help` for usage and `xcap --version` to print the version.
 
 The constraints argument may be either a single `.xdc` file or a directory; if a directory is given it is searched recursively and all `.xdc` files are merged.
 
@@ -42,3 +92,25 @@ The tool flags two classes of real Vivado constraint errors directly on the diag
 ## Export
 
 The **Export CSV** button downloads a `pinmap_report.csv` containing every assigned pin (with its bank, IO standard, derived VCCO voltage, and collision/conflict flags) plus the per-bank PL I/O utilization summary — handy for spreadsheets, reviews, or diffing between builds.
+
+## Releasing
+
+Releases are automated by GitHub Actions:
+
+- **CI** (`.github/workflows/ci.yml`) builds the package and smoke-tests the
+  installed `xcap` command on every push and pull request.
+- **Release** (`.github/workflows/release.yml`) runs when a version tag is
+  pushed. It builds the wheel + sdist and attaches them to a GitHub Release so
+  they can be installed with `pip`.
+
+To cut a release, bump `version` in both `pyproject.toml` and `xcap.py`, then:
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Publishing to PyPI is optional: configure [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/)
+for this repository and set the repository variable `PUBLISH_TO_PYPI` to `true`.
+The release workflow's PyPI job is skipped unless that variable is set, so
+GitHub Releases work out of the box without any secrets.

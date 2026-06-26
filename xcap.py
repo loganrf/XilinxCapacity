@@ -10,13 +10,18 @@ If a directory is given, it is searched recursively for all .xdc files and
 their constraints are merged together.
 
 Usage:
-    python xcap.py <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+    xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+
+    (equivalently, when running from a source checkout:
+     python xcap.py <package_data.txt> <constraints.xdc | xdc_dir/> [output.html])
 """
 
 import sys
 import re
 import os
 import json
+
+__version__ = "1.0.0"
 
 PIN_COLORS = {
     "HR":     "#4CAF50",
@@ -1025,13 +1030,23 @@ function mk(tag, cls, text) {
 
 
 def main():
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+
+    if args and args[0] in ("-V", "--version"):
+        print("xcap " + __version__)
+        sys.exit(0)
+
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0 if args else 1)
+
+    if len(args) < 2:
         print(__doc__)
         sys.exit(1)
 
-    pkg_file = sys.argv[1]
-    xdc_path = sys.argv[2]
-    out_file = sys.argv[3] if len(sys.argv) > 3 else "pinmap.html"
+    pkg_file = args[0]
+    xdc_path = args[1]
+    out_file = args[2] if len(args) > 2 else "pinmap.html"
 
     print("Parsing package data : " + pkg_file)
     pkg_pins = parse_package_data(pkg_file)

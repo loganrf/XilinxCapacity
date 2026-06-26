@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# xcap -- wrapper that runs the Xilinx IO Capacity Visualization Tool.
+#
+# This lets you invoke the tool as a terminal command from a source checkout
+# without installing it (e.g. add this directory to your PATH). When the
+# package is installed via pip, the equivalent `xcap` command is provided by
+# the console-script entry point declared in pyproject.toml instead.
+#
+# Usage:
+#   xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+
+set -euo pipefail
+
+# Resolve the directory of this script, following symlinks, so the wrapper
+# works no matter where it is invoked from or how it is linked onto PATH.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+
+# xcap.py lives in the repository root, one level up from bin/.
+REPO_ROOT="$(cd -P "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+
+PYTHON="${PYTHON:-python3}"
+exec "$PYTHON" "$REPO_ROOT/xcap.py" "$@"

@@ -1,0 +1,80 @@
+name: Release
+
+# Triggered when a version tag (e.g. v1.0.0) is pushed. Builds the package,
+# attaches the wheel + sdist to a GitHub Release (so users can `pip install`
+# the artifact or the repo), and optionally publishes to PyPI.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Verify the built command works
+        run: |
+          python -m pip install dist/*.whl
+          xcap --version
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Create GitHub Release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  pypi-publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only runs when trusted publishing has been set up and the repo variable
+    # PUBLISH_TO_PYPI is set to "true". Otherwise it is skipped, so releases
+    # still succeed via the GitHub Release above.
+    if: vars.PUBLISH_TO_PYPI == 'true'
+    environment:
+      name: pypi
+      url: https://pypi.org/project/xilinx-capacity/
+    permissions:
+      id-token: write  # required for PyPI trusted publishing (OIDC)
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -60,9 +60,92 @@ html, body {
 .pin.used:hover, .pin.used.hi { box-shadow: 0 0 12px #FFD700cc; }
 .pe { width: var(--cell); height: var(--cell); flex-shrink: 0; }
 body.show-lbl .pin { font-size: 6px; }
+.dv.sig { cursor: help; }
+#tip { position: fixed; z-index: 100; max-width: 360px; pointer-events: none;
+  background: #0b1220; border: 1px solid var(--accent); border-radius: 5px;
+  padding: 7px 9px; font-size: 11px; color: var(--text); line-height: 1.4;
+  box-shadow: 0 4px 14px rgba(0,0,0,.6); display: none; word-break: break-all; }
+#tip .tip-lbl { color: var(--accent); font-size: 9px; text-transform: uppercase;
+  letter-spacing: .07em; display: block; margin-bottom: 3px; }
+.pin.collision { border: 2px solid #ff3b30 !important;
+  box-shadow: 0 0 8px #ff3b30, 0 0 3px #ff3b30 inset !important; }
+.pin.collision:hover, .pin.collision.hi { box-shadow: 0 0 14px #ff3b30 !important; }
+.sw-coll { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px solid #ff3b30; }
+.dv.warn { color: #ff3b30; font-weight: 700; }
+#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 230px;
+  overflow-y: auto; }
+#banks h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 8px; }
+.bk { margin-bottom: 7px; font-size: 11px; }
+.bk-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.bk-name { color: var(--text); font-weight: 600; }
+.bk-name .tag { color: var(--muted); font-weight: 400; margin-left: 5px; }
+.bk-cnt { color: var(--muted); }
+.bk-cnt b { color: var(--text); }
+.bar { height: 5px; border-radius: 3px; background: #374151; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: #FFD700; }
+
+/* --- Search bar --- */
+#search-wrap { position: relative; display: flex; align-items: center; }
+#search { width: 210px; background: #111827; border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 5px 26px 5px 28px; font-size: 12px;
+  outline: none; transition: border-color .12s; }
+#search:focus { border-color: var(--accent); }
+#search-wrap .ico { position: absolute; left: 9px; font-size: 12px; color: var(--muted); pointer-events: none; }
+#search-clear { position: absolute; right: 7px; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; display: none; user-select: none; }
+#search-clear:hover { color: var(--text); }
+#search-count { font-size: 11px; color: var(--accent); min-width: 64px; }
+
+/* search filtering: non-matching pins fade back */
+.pin.nomatch { opacity: .12 !important; filter: grayscale(1); }
+.pin.match { box-shadow: 0 0 0 2px var(--accent), 0 0 9px var(--accent) !important; z-index: 5; }
+
+/* class-hidden pins (legend toggles) */
+.pin.classoff { opacity: .08 !important; filter: grayscale(1); pointer-events: none; }
+
+/* locked (clicked) selection */
+.pin.sel { transform: scale(1.45); z-index: 25;
+  box-shadow: 0 0 0 3px #fff, 0 0 12px rgba(255,255,255,.8) !important; }
+/* differential-pair partner of the selected pin */
+.pin.diffpair { box-shadow: 0 0 0 2px #22d3ee, 0 0 10px #22d3ee !important; z-index: 6; }
+/* pins belonging to a bank highlighted from the bank list */
+.pin.bankhi { box-shadow: 0 0 0 2px #a78bfa, 0 0 9px #a78bfa !important; z-index: 4; }
+
+.leg.clickable { cursor: pointer; border-radius: 4px; padding: 1px 3px; margin-left: -3px;
+  transition: background .1s; }
+.leg.clickable:hover { background: #ffffff10; }
+.leg.off { opacity: .4; text-decoration: line-through; }
+
+.bk.clickable { cursor: pointer; border-radius: 4px; padding: 3px 4px; margin: 0 -4px 7px; transition: background .1s; }
+.bk.clickable:hover { background: #ffffff0d; }
+.bk.bank-active { background: #a78bfa22; box-shadow: inset 0 0 0 1px #a78bfa66; }
+
+#detail.locked { box-shadow: inset 0 0 0 2px #ffffff22; }
+.lock-banner { display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #fff;
+  background: #ffffff14; border-radius: 4px; padding: 4px 7px; margin-bottom: 9px; }
+.lock-banner .x { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; }
+.lock-banner .x:hover { color: #fff; }
+
+.copyable { cursor: copy; }
+.copyable:hover { text-decoration: underline dotted; }
+.copied-flash { color: var(--accent) !important; }
+
+.btn { background: #111827; border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; transition: border-color .12s, background .12s; }
+.btn:hover { border-color: var(--accent); background: #1b2533; }
+
+.dv.warn.volt { color: #fbbf24; }
+.sw-volt { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px solid #fbbf24; }
+.bk-warn { color: #fbbf24; font-weight: 700; margin-left: 5px; cursor: help; }
 </style>
 </head>
 <body>
+<div id="tip"></div>
 <div id="app">
 <div id="sb">
   <div class="sb-hd">
@@ -70,20 +153,35 @@ body.show-lbl .pin { font-size: 6px; }
     <div class="src">&#128230; S7_CSGA324.txt<br>&#128279; Arty-S7-25-Master.xdc</div>
   </div>
   <div id="detail"><p class="ph">Hover over a pin</p></div>
+  <div id="banks">
+    <h3>PL I/O Utilization by Bank</h3>
+    <div id="bank-list"></div>
+  </div>
   <div id="stats">
-    I/O used: <b>6</b> / <b>150</b> &nbsp;(<b>4.0%</b>)
+    PL I/O used: <b>6</b> / <b>150</b> &nbsp;(<b>4.0%</b>)
   </div>
   <div id="legend">
     <h3>Legend</h3>
     <div id="leg"></div>
     <div class="leg"><div class="sw-used"></div> Assigned in XDC</div>
+    <div class="leg"><div class="sw-coll"></div> Pin collision</div>
+    <div class="leg"><div class="sw-volt"></div> Bank VCCO conflict</div>
+    <div class="leg" style="color:var(--muted);margin-top:6px;font-size:10px">Click a swatch to hide/show that type</div>
   </div>
 </div>
 <div id="main">
   <div id="tb">
     <h1>&#128204; S7_CSGA324.txt</h1>
+    <div id="search-wrap">
+      <span class="ico">&#128269;</span>
+      <input type="text" id="search" placeholder="Search pin, signal, bank, IO std" autocomplete="off" spellcheck="false">
+      <span id="search-clear" title="Clear search">&times;</span>
+    </div>
+    <span id="search-count"></span>
     <label class="ck"><input type="checkbox" id="chk-dim"> Unused Pins Dimmed</label>
     <label class="ck"><input type="checkbox" id="chk-lbl"> Pin Labels</label>
+    <label class="ck"><input type="checkbox" id="chk-bank"> Bank Labels</label>
+    <button class="btn" id="btn-export" title="Download pin assignments &amp; bank utilization as CSV">&#11015; Export CSV</button>
   </div>
   <div id="gs"><div id="grid"></div></div>
 </div>
@@ -91,7 +189,10 @@ body.show-lbl .pin { font-size: 6px; }
 <script>
 'use strict';
 var PKG    = {"V8": {"name": "DONE_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "L10": {"name": "DXP_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "H9": {"name": "GNDADC_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "H10": {"name": "VCCADC_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "K10": {"name": "VREFP_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "K9": {"name": "VN_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "B8": {"name": "VCCBATT_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "D9": {"name": "TCK_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "L9": {"name": "DXN_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "J9": {"name": "VREFN_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "J10": {"name": "VP_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "C8": {"name": "CCLK_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "T10": {"name": "M0_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "U10": {"name": "M1_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "U8": {"name": "INIT_B_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "R9": {"name": "TDI_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "T8": {"name": "TDO_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "U9": {"name": "M2_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "V9": {"name": "CFGBVS_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "R8": {"name": "PROGRAM_B_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "T9": {"name": "TMS_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "CONFIG", "no_connect": "NA", "color_key": "CONFIG"}, "L13": {"name": "IO_0_14", "byte_group": "NA", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K17": {"name": "IO_L1P_T0_D00_MOSI_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K18": {"name": "IO_L1N_T0_D01_DIN_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L14": {"name": "IO_L2P_T0_D02_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M15": {"name": "IO_L2N_T0_D03_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L15": {"name": "IO_L3P_T0_DQS_PUDC_B_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L16": {"name": "IO_L3N_T0_DQS_EMCCLK_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L17": {"name": "IO_L4P_T0_D04_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L18": {"name": "IO_L4N_T0_D05_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M14": {"name": "IO_L5P_T0_D06_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N14": {"name": "IO_L5N_T0_D07_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M13": {"name": "IO_L6P_T0_FCS_B_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N13": {"name": "IO_L6N_T0_D08_VREF_14", "byte_group": "0", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M16": {"name": "IO_L7P_T1_D09_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M17": {"name": "IO_L7N_T1_D10_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M18": {"name": "IO_L8P_T1_D11_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N18": {"name": "IO_L8N_T1_D12_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P17": {"name": "IO_L9P_T1_DQS_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P18": {"name": "IO_L9N_T1_DQS_D13_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R18": {"name": "IO_L10P_T1_D14_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T18": {"name": "IO_L10N_T1_D15_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P14": {"name": "IO_L11P_T1_SRCC_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P15": {"name": "IO_L11N_T1_SRCC_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N15": {"name": "IO_L12P_T1_MRCC_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P16": {"name": "IO_L12N_T1_MRCC_14", "byte_group": "1", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R14": {"name": "IO_L13P_T2_MRCC_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T14": {"name": "IO_L13N_T2_MRCC_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R16": {"name": "IO_L14P_T2_SRCC_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R17": {"name": "IO_L14N_T2_SRCC_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U17": {"name": "IO_L15P_T2_DQS_RDWR_B_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U18": {"name": "IO_L15N_T2_DQS_DOUT_CSO_B_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U16": {"name": "IO_L16P_T2_CSI_B_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V17": {"name": "IO_L16N_T2_D31_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R15": {"name": "IO_L17P_T2_D30_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T15": {"name": "IO_L17N_T2_D29_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U15": {"name": "IO_L18P_T2_D28_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V16": {"name": "IO_L18N_T2_D27_14", "byte_group": "2", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P13": {"name": "IO_L19P_T3_D26_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R13": {"name": "IO_L19N_T3_D25_VREF_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V14": {"name": "IO_L20P_T3_D24_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V15": {"name": "IO_L20N_T3_D23_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U12": {"name": "IO_L21P_T3_DQS_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V13": {"name": "IO_L21N_T3_DQS_D22_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T12": {"name": "IO_L22P_T3_D21_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T13": {"name": "IO_L22N_T3_D20_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R11": {"name": "IO_L23P_T3_D19_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T11": {"name": "IO_L23N_T3_D18_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U11": {"name": "IO_L24P_T3_D17_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V12": {"name": "IO_L24N_T3_D16_14", "byte_group": "3", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R12": {"name": "IO_25_14", "byte_group": "NA", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "G13": {"name": "IO_0_15", "byte_group": "NA", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B13": {"name": "IO_L1P_T0_AD0P_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "A13": {"name": "IO_L1N_T0_AD0N_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B14": {"name": "IO_L2P_T0_AD8P_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "A14": {"name": "IO_L2N_T0_AD8N_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B15": {"name": "IO_L3P_T0_DQS_AD1P_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "A15": {"name": "IO_L3N_T0_DQS_AD1N_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B16": {"name": "IO_L4P_T0_AD9P_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "A16": {"name": "IO_L4N_T0_AD9N_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E12": {"name": "IO_L5P_T0_AD2P_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D12": {"name": "IO_L5N_T0_AD2N_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "C13": {"name": "IO_L6P_T0_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "C14": {"name": "IO_L6N_T0_VREF_15", "byte_group": "0", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B17": {"name": "IO_L7P_T1_AD10P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "A17": {"name": "IO_L7N_T1_AD10N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "C17": {"name": "IO_L8P_T1_AD3P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "B18": {"name": "IO_L8N_T1_AD3N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D16": {"name": "IO_L9P_T1_DQS_AD11P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D17": {"name": "IO_L9N_T1_DQS_AD11N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E16": {"name": "IO_L10P_T1_AD4P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E17": {"name": "IO_L10N_T1_AD4N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D18": {"name": "IO_L11P_T1_SRCC_AD12P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "C18": {"name": "IO_L11N_T1_SRCC_AD12N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D14": {"name": "IO_L12P_T1_MRCC_AD5P_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "D15": {"name": "IO_L12N_T1_MRCC_AD5N_15", "byte_group": "1", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "F14": {"name": "IO_L13P_T2_MRCC_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "F15": {"name": "IO_L13N_T2_MRCC_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "G16": {"name": "IO_L14P_T2_SRCC_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "G17": {"name": "IO_L14N_T2_SRCC_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E14": {"name": "IO_L15P_T2_DQS_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E15": {"name": "IO_L15N_T2_DQS_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "F18": {"name": "IO_L16P_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E18": {"name": "IO_L16N_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "F13": {"name": "IO_L17P_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "E13": {"name": "IO_L17N_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H15": {"name": "IO_L18P_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "G15": {"name": "IO_L18N_T2_15", "byte_group": "2", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K16": {"name": "IO_L19P_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "J16": {"name": "IO_L19N_T3_VREF_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H13": {"name": "IO_L20P_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H14": {"name": "IO_L20N_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H18": {"name": "IO_L21P_T3_DQS_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "G18": {"name": "IO_L21N_T3_DQS_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H16": {"name": "IO_L22P_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "H17": {"name": "IO_L22N_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K14": {"name": "IO_L23P_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "J15": {"name": "IO_L23N_T3_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "J13": {"name": "IO_L24P_T3_RS1_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "J14": {"name": "IO_L24N_T3_RS0_15", "byte_group": "3", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K13": {"name": "IO_25_15", "byte_group": "NA", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "J6": {"name": "IO_0_34", "byte_group": "NA", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K4": {"name": "IO_L1P_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L4": {"name": "IO_L1N_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K3": {"name": "IO_L2P_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K2": {"name": "IO_L2N_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K1": {"name": "IO_L3P_T0_DQS_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L1": {"name": "IO_L3N_T0_DQS_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "K6": {"name": "IO_L4P_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L6": {"name": "IO_L4N_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "L5": {"name": "IO_L5P_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M4": {"name": "IO_L5N_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M6": {"name": "IO_L6P_T0_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M5": {"name": "IO_L6N_T0_VREF_34", "byte_group": "0", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M3": {"name": "IO_L7P_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M2": {"name": "IO_L7N_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "M1": {"name": "IO_L8P_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N1": {"name": "IO_L8N_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N3": {"name": "IO_L9P_T1_DQS_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N2": {"name": "IO_L9N_T1_DQS_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N5": {"name": "IO_L10P_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "N4": {"name": "IO_L10N_T1_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P2": {"name": "IO_L11P_T1_SRCC_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P1": {"name": "IO_L11N_T1_SRCC_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R2": {"name": "IO_L12P_T1_MRCC_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R1": {"name": "IO_L12N_T1_MRCC_34", "byte_group": "1", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R3": {"name": "IO_L13P_T2_MRCC_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T2": {"name": "IO_L13N_T2_MRCC_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T1": {"name": "IO_L14P_T2_SRCC_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U1": {"name": "IO_L14N_T2_SRCC_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U3": {"name": "IO_L15P_T2_DQS_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U2": {"name": "IO_L15N_T2_DQS_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V3": {"name": "IO_L16P_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V2": {"name": "IO_L16N_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V5": {"name": "IO_L17P_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V4": {"name": "IO_L17N_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R4": {"name": "IO_L18P_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T3": {"name": "IO_L18N_T2_34", "byte_group": "2", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P6": {"name": "IO_L19P_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P5": {"name": "IO_L19N_T3_VREF_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V7": {"name": "IO_L20P_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "V6": {"name": "IO_L20N_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R5": {"name": "IO_L21P_T3_DQS_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T4": {"name": "IO_L21N_T3_DQS_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T6": {"name": "IO_L22P_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "T5": {"name": "IO_L22N_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R7": {"name": "IO_L23P_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "R6": {"name": "IO_L23N_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U7": {"name": "IO_L24P_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "U6": {"name": "IO_L24N_T3_34", "byte_group": "3", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "P7": {"name": "IO_25_34", "byte_group": "NA", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "HR", "no_connect": "NA", "color_key": "HR"}, "F12": {"name": "VCCAUX", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "H12": {"name": "VCCAUX", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "K12": {"name": "VCCAUX", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "M12": {"name": "VCCAUX", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "P12": {"name": "VCCAUX", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "E7": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "E9": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "E11": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "F8": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "F10": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "G7": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "G9": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "G11": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "H8": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "J7": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "J11": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "K8": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "L11": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "M8": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "M10": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "N9": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "N11": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "P8": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "P10": {"name": "VCCINT", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "A1": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "A12": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "A18": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "B9": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "C6": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "C16": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "D3": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "D13": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "E8": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "E10": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "F7": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "F9": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "F11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "F17": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "G4": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "G8": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "G10": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "G12": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "G14": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "H1": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "H7": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "H11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "J8": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "J12": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "J18": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "K5": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "K7": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "K11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "K15": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "L2": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "L8": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "L12": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "M7": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "M9": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "M11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "N6": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "N8": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "N10": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "N12": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "N16": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "P3": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "P9": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "P11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "R10": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "T7": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "T17": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "U4": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "U14": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "V1": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "V11": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "V18": {"name": "GND", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "GND"}, "D8": {"name": "VCCO_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "V10": {"name": "VCCO_0", "byte_group": "NA", "bank": "0", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "N17": {"name": "VCCO_14", "byte_group": "NA", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "T16": {"name": "VCCO_14", "byte_group": "NA", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "U13": {"name": "VCCO_14", "byte_group": "NA", "bank": "14", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "C15": {"name": "VCCO_15", "byte_group": "NA", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "F16": {"name": "VCCO_15", "byte_group": "NA", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "J17": {"name": "VCCO_15", "byte_group": "NA", "bank": "15", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "L3": {"name": "VCCO_34", "byte_group": "NA", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "P4": {"name": "VCCO_34", "byte_group": "NA", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "U5": {"name": "VCCO_34", "byte_group": "NA", "bank": "34", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "L7": {"name": "VCCBRAM", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "N7": {"name": "VCCBRAM", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "VCC"}, "A2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A7": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A8": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A9": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A10": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "A11": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B7": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B10": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B11": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "B12": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C7": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C9": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C10": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C11": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "C12": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D7": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D10": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "D11": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "E6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "F6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "G1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "G2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "G3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "G5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "G6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "H2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "H3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "H4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "H5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "H6": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "J1": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "J2": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "J3": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "J4": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}, "J5": {"name": "NC", "byte_group": "NA", "bank": "NA", "vccaux": "NA", "slr": "NA", "io_type": "NA", "no_connect": "NA", "color_key": "NC"}};
-var USED   = {"J15": {"signal": "led0_r", "iostandard": "LVCMOS33"}, "G17": {"signal": "led0_g", "iostandard": "LVCMOS33"}, "F15": {"signal": "led0_b", "iostandard": "LVCMOS33"}, "E15": {"signal": "led1_r", "iostandard": "LVCMOS33"}, "F18": {"signal": "led1_g", "iostandard": "LVCMOS33"}, "E14": {"signal": "led1_b", "iostandard": "LVCMOS33"}};
+var USED   = {"J15": {"signal": "led0_r", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}, "G17": {"signal": "led0_g", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}, "F15": {"signal": "led0_b", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}, "E15": {"signal": "led1_r", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}, "F18": {"signal": "led1_g", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}, "E14": {"signal": "led1_b", "iostandard": "LVCMOS33", "file": "Arty-S7-25-Master.xdc"}};
+var COLL   = {};
+var BANKS  = [{"bank": "14", "io_type": "HR", "total": 50, "used": 0}, {"bank": "15", "io_type": "HR", "total": 50, "used": 6}, {"bank": "34", "io_type": "HR", "total": 50, "used": 0}];
+var VCCO   = {};
 var ROWS   = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "R", "T", "U", "V"];
 var COLS   = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 var COLORS = {"HR": "#4CAF50", "HP": "#2196F3", "HD": "#9C27B0", "CONFIG": "#FF9800", "GND": "#607D8B", "VCC": "#F44336", "NC": "#424242", "OTHER": "#9E9E9E"};
@@ -103,17 +204,89 @@ var LABEL_MAP = {
   NC:'No-Connect', OTHER:'Other'
 };
 
-// Legend
+// Assign each distinct bank a unique label color. Hues are spread by the
+// golden angle so adjacent banks stay visually distinct.
+var BANK_COLORS = {};
+(function() {
+  var set = {};
+  Object.values(PKG).forEach(function(p){ if (p.bank && p.bank !== 'NA') set[p.bank] = 1; });
+  Object.keys(set).sort(function(a, b) {
+    var na = parseInt(a, 10), nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }).forEach(function(bank, i) {
+    BANK_COLORS[bank] = 'hsl(' + ((i * 137.5) % 360).toFixed(1) + ', 80%, 68%)';
+  });
+})();
+
+// Legend -- each swatch toggles visibility of that pin class in the grid.
 var usedKeys = {};
 Object.values(PKG).forEach(function(p){ usedKeys[p.color_key] = 1; });
+var hiddenClasses = {};   // color_key -> true when hidden
 var legEl = document.getElementById('leg');
 Object.keys(COLORS).forEach(function(key) {
   if (!usedKeys[key]) return;
   var d = document.createElement('div');
-  d.className = 'leg';
+  d.className = 'leg clickable';
+  d.dataset.key = key;
   d.innerHTML = '<div class="sw" style="background:' + COLORS[key] + '"></div><span>' + (LABEL_MAP[key] || key) + '</span>';
+  d.addEventListener('click', function() {
+    if (hiddenClasses[key]) { delete hiddenClasses[key]; d.classList.remove('off'); }
+    else { hiddenClasses[key] = true; d.classList.add('off'); }
+    applyClassVisibility();
+  });
   legEl.appendChild(d);
 });
+function applyClassVisibility() {
+  document.querySelectorAll('.pin').forEach(function(cell) {
+    var d = PKG[cell.dataset.loc];
+    cell.classList.toggle('classoff', !!hiddenClasses[d.color_key]);
+  });
+}
+
+// PL I/O utilization by bank
+var bankListEl = document.getElementById('bank-list');
+if (!BANKS.length) {
+  bankListEl.innerHTML = '<p class="ph">No PL I/O banks found</p>';
+} else {
+  BANKS.forEach(function(b) {
+    var pct = b.total ? (b.used / b.total * 100) : 0;
+    var div = document.createElement('div');
+    div.className = 'bk clickable';
+    div.dataset.bank = b.bank;
+    var bc = BANK_COLORS[b.bank] || 'var(--text)';
+    var warn = '';
+    if (VCCO[b.bank]) {
+      var volts = Object.keys(VCCO[b.bank].voltages).map(function(v){ return v + 'V'; }).join(' vs ');
+      warn = '<span class="bk-warn" title="VCCO conflict: ' + volts + '">&#9888;</span>';
+    }
+    div.innerHTML =
+      '<div class="bk-top">' +
+        '<span class="bk-name" style="color:' + bc + '">Bank ' + b.bank + '<span class="tag">' + b.io_type + '</span>' + warn + '</span>' +
+        '<span class="bk-cnt"><b>' + b.used + '</b> / ' + b.total + ' (' + pct.toFixed(0) + '%)</span>' +
+      '</div>' +
+      '<div class="bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
+    div.addEventListener('click', function() { toggleBankHighlight(b.bank, div); });
+    bankListEl.appendChild(div);
+  });
+}
+
+// Highlight every pin in a bank when its row in the utilization list is clicked.
+var activeBank = null;
+function toggleBankHighlight(bank, div) {
+  var turningOn = activeBank !== bank;
+  document.querySelectorAll('.bk.bank-active').forEach(function(e){ e.classList.remove('bank-active'); });
+  document.querySelectorAll('.pin.bankhi').forEach(function(e){ e.classList.remove('bankhi'); });
+  if (turningOn) {
+    activeBank = bank;
+    div.classList.add('bank-active');
+    document.querySelectorAll('.pin').forEach(function(cell) {
+      if (PKG[cell.dataset.loc].bank === bank) cell.classList.add('bankhi');
+    });
+  } else {
+    activeBank = null;
+  }
+}
 
 // Build grid
 var grid = document.getElementById('grid');
@@ -130,12 +303,14 @@ ROWS.forEach(function(r) {
     var data = PKG[loc];
     if (!data) { row.appendChild(mk('div','pe')); return; }
     var isUsed = !!USED[loc];
+    var isColl = !!COLL[loc];
     var color  = COLORS[data.color_key] || COLORS['OTHER'];
-    var cell   = mk('div','pin'+(isUsed?' used':''),loc);
+    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':''),loc);
     cell.style.background = color;
     cell.dataset.loc = loc;
-    cell.addEventListener('mouseenter', (function(l,c){ return function(){ showDetail(l,c); }; })(loc,cell));
-    cell.addEventListener('mouseleave', (function(c){ return function(){ clearHi(c); }; })(cell));
+    cell.addEventListener('mouseenter', (function(l,c){ return function(){ if (!locked) showDetail(l,c,false); }; })(loc,cell));
+    cell.addEventListener('mouseleave', (function(c){ return function(){ if (!locked) clearHi(c); }; })(cell));
+    cell.addEventListener('click', (function(l,c){ return function(ev){ ev.stopPropagation(); lockPin(l,c); }; })(loc,cell));
     row.appendChild(cell);
   });
   grid.appendChild(row);
@@ -159,18 +334,64 @@ function applyDim() {
   });
 }
 
-// Label toggle
-document.getElementById('chk-lbl').addEventListener('change', function(e) {
-  document.body.classList.toggle('show-lbl', e.target.checked);
-});
+// Label toggles -- pin location labels and per-bank colored bank labels.
+// When both are on, bank labels take precedence (one label fits per pin).
+var chkLbl  = document.getElementById('chk-lbl');
+var chkBank = document.getElementById('chk-bank');
+function applyLabels() {
+  var showPin = chkLbl.checked, showBank = chkBank.checked;
+  document.body.classList.toggle('show-lbl', showPin || showBank);
+  document.querySelectorAll('.pin').forEach(function(cell) {
+    var loc = cell.dataset.loc, d = PKG[loc];
+    if (showBank) {
+      var b = d.bank;
+      cell.textContent = (b && b !== 'NA') ? b : '';
+      cell.style.color = BANK_COLORS[b] || 'rgba(255,255,255,.75)';
+    } else {
+      cell.textContent = loc;
+      cell.style.color = '';
+    }
+  });
+}
+chkLbl.addEventListener('change', applyLabels);
+chkBank.addEventListener('change', applyLabels);
+
+// Differential-pair partner map: link each L##P pin to its L##N sibling in the
+// same bank (Xilinx names them e.g. IO_L13P_T2_... / IO_L13N_T2_...).
+var DIFF_PARTNER = {};
+(function() {
+  var groups = {};
+  Object.keys(PKG).forEach(function(loc) {
+    var nm = (PKG[loc].name || '').toUpperCase();
+    var m = nm.match(/_L(\d+)(P|N)_/) || nm.match(/^L(\d+)(P|N)/);
+    if (!m) return;
+    var key = PKG[loc].bank + '|' + m[1];
+    (groups[key] = groups[key] || {})[m[2]] = loc;
+  });
+  Object.keys(groups).forEach(function(k) {
+    var g = groups[k];
+    if (g.P && g.N) { DIFF_PARTNER[g.P] = g.N; DIFF_PARTNER[g.N] = g.P; }
+  });
+})();
 
 // Detail panel
 var hiCell = null;
+var locked = false;       // true while a pin is click-locked
+var lockedLoc = null;
 var panel = document.getElementById('detail');
-function showDetail(loc, cell) {
+function showDetail(loc, cell, isLocked) {
   if (hiCell) hiCell.classList.remove('hi');
   hiCell = cell;
   cell.classList.add('hi');
+
+  // Highlight the differential-pair partner, if any.
+  document.querySelectorAll('.pin.diffpair').forEach(function(e){ e.classList.remove('diffpair'); });
+  var partner = DIFF_PARTNER[loc];
+  if (partner) {
+    var pc = document.querySelector('.pin[data-loc="' + partner + '"]');
+    if (pc) pc.classList.add('diffpair');
+  }
+
   var d    = PKG[loc] || {};
   var used = USED[loc];
   var rows = [
@@ -183,18 +404,182 @@ function showDetail(loc, cell) {
     ['SLR',        d.slr        || '--'],
     ['No-Connect', d.no_connect || '--']
   ];
+  if (partner) {
+    rows.push(['Diff Pair', partner + '  (' + (PKG[partner].name || '') + ')']);
+  }
   if (used) {
     rows.push(['Signal',      used.signal]);
     rows.push(['IO Standard', used.iostandard]);
   }
-  panel.innerHTML = rows.map(function(pair) {
+  var coll = COLL[loc];
+  if (coll) {
+    rows.push(['⚠ Collision', coll.length + ' signals on this pin: ' + coll.join(', ')]);
+  }
+  var vc = used ? VCCO[d.bank] : null;
+  if (vc) {
+    var volts = Object.keys(vc.voltages).map(function(v){ return v + 'V'; }).join(', ');
+    rows.push(['⚠ VCCO Conflict', 'Bank ' + d.bank + ' has signals needing ' + volts + ' — one bank can supply only one VCCO.']);
+  }
+
+  var banner = isLocked
+    ? '<div class="lock-banner"><span>📌 Locked — ' + escAttr(loc) + '</span><span class="x" id="unlock">&times;</span></div>'
+    : '';
+  panel.innerHTML = banner + rows.map(function(pair) {
     var label = pair[0], val = pair[1];
-    var cls = '';
-    if (label === 'Signal') cls = 'sig';
+    var cls = '', attr = '';
+    if (label === 'Signal') {
+      cls = 'sig copyable';
+      attr = ' data-copy="' + escAttr(val) + '"';
+      if (used && used.file) attr += ' data-file="' + escAttr(used.file) + '"';
+    }
+    else if (label === 'Pin' || label === 'Pin Name') { cls = 'copyable'; attr = ' data-copy="' + escAttr(val) + '"'; }
+    else if (label.indexOf('Collision') !== -1) cls = 'warn';
+    else if (label.indexOf('VCCO') !== -1) cls = 'warn volt';
     else if (val === 'NA' || val === '--') cls = 'na';
-    return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'">'+val+'</div></div>';
+    return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'"'+attr+'>'+val+'</div></div>';
   }).join('');
+
+  if (isLocked) {
+    var ub = document.getElementById('unlock');
+    if (ub) ub.addEventListener('click', function(ev){ ev.stopPropagation(); unlockPin(); });
+  }
 }
+
+// Click a pin to lock its details so they persist while the mouse moves away.
+// Clicking the same pin again (or the background, or Escape) unlocks.
+function lockPin(loc, cell) {
+  if (locked && lockedLoc === loc) { unlockPin(); return; }
+  if (lockedCell) lockedCell.classList.remove('sel');
+  locked = true; lockedLoc = loc; lockedCell = cell;
+  cell.classList.add('sel');
+  panel.classList.add('locked');
+  showDetail(loc, cell, true);
+}
+var lockedCell = null;
+function unlockPin() {
+  locked = false; lockedLoc = null;
+  if (lockedCell) { lockedCell.classList.remove('sel'); lockedCell.classList.remove('hi'); }
+  lockedCell = null;
+  panel.classList.remove('locked');
+  document.querySelectorAll('.pin.diffpair').forEach(function(e){ e.classList.remove('diffpair'); });
+  panel.innerHTML = '<p class="ph">Hover over a pin</p>';
+  if (hiCell) { hiCell.classList.remove('hi'); hiCell = null; }
+}
+// Click empty grid space to clear a lock.
+document.getElementById('gs').addEventListener('click', function(){ if (locked) unlockPin(); });
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') { if (locked) unlockPin(); var s = document.getElementById('search'); if (s.value) { s.value=''; runSearch(); } }
+});
+
+// Click-to-copy for pin / signal fields.
+panel.addEventListener('click', function(e) {
+  var t = e.target.closest('[data-copy]');
+  if (!t) return;
+  var txt = t.getAttribute('data-copy');
+  var done = function(){ var o = t.textContent; t.classList.add('copied-flash'); t.textContent = '✓ copied'; setTimeout(function(){ t.textContent = o; t.classList.remove('copied-flash'); }, 850); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
+  else done();
+});
+
+// --- Search / filter: match pins by location, signal, bank, pin name, or
+// IO standard. Matches are ringed; everything else fades back. ---
+var searchEl = document.getElementById('search');
+var searchClear = document.getElementById('search-clear');
+var searchCount = document.getElementById('search-count');
+function runSearch() {
+  var q = searchEl.value.trim().toLowerCase();
+  searchClear.style.display = q ? 'block' : 'none';
+  var pins = document.querySelectorAll('.pin');
+  if (!q) {
+    searchCount.textContent = '';
+    pins.forEach(function(c){ c.classList.remove('match'); c.classList.remove('nomatch'); });
+    return;
+  }
+  var n = 0;
+  pins.forEach(function(cell) {
+    var loc = cell.dataset.loc, d = PKG[loc], u = USED[loc];
+    var hay = [loc, d.name, d.bank, d.io_type, d.byte_group,
+               u ? u.signal : '', u ? u.iostandard : ''].join(' ').toLowerCase();
+    if (hay.indexOf(q) !== -1) { cell.classList.add('match'); cell.classList.remove('nomatch'); n++; }
+    else { cell.classList.remove('match'); cell.classList.add('nomatch'); }
+  });
+  searchCount.textContent = n + ' match' + (n === 1 ? '' : 'es');
+}
+searchEl.addEventListener('input', runSearch);
+searchClear.addEventListener('click', function(){ searchEl.value=''; runSearch(); searchEl.focus(); });
+
+// --- CSV export: assigned pins + per-bank utilization, downloaded client-side. ---
+function csvCell(v) {
+  v = (v === undefined || v === null) ? '' : String(v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function exportCSV() {
+  var lines = [];
+  lines.push('# Assigned pins');
+  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','XDC File'].map(csvCell).join(','));
+  Object.keys(USED).sort().forEach(function(loc) {
+    var d = PKG[loc] || {}, u = USED[loc];
+    var vc = VCCO[d.bank] ? 'YES' : '';
+    lines.push([loc, d.name, d.bank, d.io_type, u.signal, u.iostandard,
+                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc, u.file].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push('# Bank utilization (PL I/O)');
+  lines.push(['Bank','I/O Type','Used','Total','Percent','VCCO Conflict'].map(csvCell).join(','));
+  BANKS.forEach(function(b) {
+    var pct = b.total ? (b.used / b.total * 100).toFixed(1) : '0.0';
+    lines.push([b.bank, b.io_type, b.used, b.total, pct, VCCO[b.bank] ? 'YES' : ''].map(csvCell).join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type: 'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'pinmap_report.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+// Mirror of Python's iostandard_vcco for the CSV's VCCO column.
+function iostdVcco(s) {
+  if (!s) return '';
+  s = s.toUpperCase().replace(/["{}]/g, '').trim();
+  var explicit = {LVTTL:'3.3',PCI33_3:'3.3',LVDS_25:'2.5',MINI_LVDS_25:'2.5',RSDS_25:'2.5',BLVDS_25:'2.5',TMDS_33:'3.3',PPDS_25:'2.5'};
+  if (explicit[s]) return explicit[s];
+  var m = s.match(/(\d{2,3})(?!.*\d)/);
+  if (!m) return '';
+  var dg = m[1];
+  return (dg.length === 3 ? (parseInt(dg,10)/100) : (parseInt(dg,10)/10)).toFixed(2);
+}
+document.getElementById('btn-export').addEventListener('click', exportCSV);
+
+// Tooltip: hovering the signal name reveals the source .xdc file path(s).
+var tip = document.getElementById('tip');
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function positionTip(e) {
+  var x = e.clientX + 14, y = e.clientY + 16;
+  var w = tip.offsetWidth, h = tip.offsetHeight;
+  if (x + w > window.innerWidth  - 8) x = e.clientX - w - 14;
+  if (y + h > window.innerHeight - 8) y = e.clientY - h - 16;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+}
+panel.addEventListener('mouseover', function(e) {
+  var t = e.target.closest('[data-file]');
+  if (!t) return;
+  var f = t.getAttribute('data-file');
+  if (!f) return;
+  tip.innerHTML = '<span class="tip-lbl">XDC source</span>' +
+    f.split('; ').map(escAttr).join('<br>');
+  tip.style.display = 'block';
+  positionTip(e);
+});
+panel.addEventListener('mousemove', function(e) {
+  if (tip.style.display === 'block') positionTip(e);
+});
+panel.addEventListener('mouseout', function(e) {
+  if (e.target.closest('[data-file]')) tip.style.display = 'none';
+});
 function clearHi(cell) {
   cell.classList.remove('hi');
   if (hiCell === cell) hiCell = null;

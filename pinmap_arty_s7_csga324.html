@@ -25,14 +25,14 @@ html, body {
 .sb-hd { padding: 12px 14px; border-bottom: 1px solid var(--border); background: #111827cc; }
 .sb-hd h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; }
 .sb-hd .src { font-size: 10px; color: var(--muted); margin-top: 4px; word-break: break-all; }
-#detail { flex: 1; overflow-y: auto; padding: 12px 14px; }
+#detail { flex: 1; min-height: 130px; overflow-y: auto; padding: 12px 14px; }
 .ph { color: var(--muted); font-style: italic; font-size: 12px; margin-top: 8px; }
 .dr { margin-bottom: 11px; }
 .dl { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 2px; }
 .dv { font-size: 13px; font-weight: 500; line-height: 1.3; word-break: break-all; }
 .dv.sig { color: #FFD700; font-weight: 700; }
 .dv.na  { color: var(--muted); }
-#stats { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); line-height: 1.8; }
+#stats { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); line-height: 1.8; flex-shrink: 0; }
 #stats b { color: var(--text); }
 #legend { padding: 10px 14px 14px; border-top: 1px solid var(--border); }
 #legend h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 7px; }
@@ -73,7 +73,7 @@ body.show-lbl .pin { font-size: 6px; }
 .sw-coll { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
   background: transparent; border: 2px solid #ff3b30; }
 .dv.warn { color: #ff3b30; font-weight: 700; }
-#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 230px;
+#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 160px;
   overflow-y: auto; }
 #banks h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
   color: var(--muted); margin-bottom: 8px; }
@@ -142,6 +142,58 @@ body.show-lbl .pin { font-size: 6px; }
 .sw-volt { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
   background: transparent; border: 2px solid #fbbf24; }
 .bk-warn { color: #fbbf24; font-weight: 700; margin-left: 5px; cursor: help; }
+
+/* --- Missing-IOSTANDARD (Vivado DRC NSTD-1) markers --- */
+.pin.nostd { border: 2px dashed #ff9f0a !important;
+  box-shadow: 0 0 7px #ff9f0a99 !important; }
+.pin.nostd:hover, .pin.nostd.hi { box-shadow: 0 0 13px #ff9f0a !important; }
+.sw-nostd { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px dashed #ff9f0a; }
+.dv.warn.nostd { color: #ff9f0a; }
+
+/* --- IO standard summary panel --- */
+#iostds { border-top: 1px solid var(--border); padding: 10px 14px 4px;
+  max-height: 110px; overflow-y: auto; }
+#iostds h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 7px; }
+.std { display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; padding: 3px 4px; margin: 0 -4px 2px; border-radius: 4px;
+  cursor: pointer; transition: background .1s; }
+.std:hover { background: #ffffff0d; }
+.std.std-active { background: #34d39922; box-shadow: inset 0 0 0 1px #34d39966; }
+.std .cnt { color: var(--muted); }
+.std .cnt b { color: var(--text); }
+.pin.stdhi { box-shadow: 0 0 0 2px #34d399, 0 0 9px #34d399 !important; z-index: 4; }
+
+/* --- Power summary panel (Vivado report_power) --- */
+#power { border-top: 1px solid var(--border); padding: 10px 14px;
+  max-height: 190px; overflow-y: auto; }
+#power h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 7px; }
+#power .pw-src { color: var(--muted); text-transform: none; letter-spacing: 0;
+  font-weight: 400; float: right; }
+.pw-total { font-size: 20px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.pw-total small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.pw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+  margin: 7px 0 4px; font-size: 11px; }
+.pw-grid .k { color: var(--muted); }
+.pw-grid .v { color: var(--text); font-weight: 600; text-align: right; }
+.pw-sec { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 8px 0 4px; }
+.pw-comp { margin-bottom: 4px; font-size: 11px; }
+.pw-comp .bar { margin-top: 2px; }
+.pw-comp .bar > span { background: #38bdf8; }
+.pw-comp-top { display: flex; justify-content: space-between; }
+.pw-rail { display: flex; justify-content: space-between; font-size: 11px;
+  margin-bottom: 3px; }
+.pw-rail .rn { color: var(--text); font-weight: 600; }
+.pw-rail .rv { color: var(--muted); }
+
+/* Power heatmap: legend gradient chip shown while the mode is active */
+#heat-scale { display: none; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+#heat-scale .grad { width: 90px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, hsl(240,90%,55%), hsl(120,90%,45%), hsl(0,90%,55%)); }
+body.heat-on #heat-scale { display: flex; }
 </style>
 </head>
 <body>
@@ -157,6 +209,11 @@ body.show-lbl .pin { font-size: 6px; }
     <h3>PL I/O Utilization by Bank</h3>
     <div id="bank-list"></div>
   </div>
+  <div id="iostds">
+    <h3>IO Standards in Use</h3>
+    <div id="std-list"></div>
+  </div>
+  <div id="power"></div>
   <div id="stats">
     PL I/O used: <b>6</b> / <b>150</b> &nbsp;(<b>4.0%</b>)
   </div>
@@ -166,6 +223,7 @@ body.show-lbl .pin { font-size: 6px; }
     <div class="leg"><div class="sw-used"></div> Assigned in XDC</div>
     <div class="leg"><div class="sw-coll"></div> Pin collision</div>
     <div class="leg"><div class="sw-volt"></div> Bank VCCO conflict</div>
+    <div class="leg"><div class="sw-nostd"></div> Missing IOSTANDARD</div>
     <div class="leg" style="color:var(--muted);margin-top:6px;font-size:10px">Click a swatch to hide/show that type</div>
   </div>
 </div>
@@ -181,6 +239,9 @@ body.show-lbl .pin { font-size: 6px; }
     <label class="ck"><input type="checkbox" id="chk-dim"> Unused Pins Dimmed</label>
     <label class="ck"><input type="checkbox" id="chk-lbl"> Pin Labels</label>
     <label class="ck"><input type="checkbox" id="chk-bank"> Bank Labels</label>
+    <label class="ck"><input type="checkbox" id="chk-bankcol"> Color by Bank</label>
+    <label class="ck" id="lbl-heat"><input type="checkbox" id="chk-heat"> Power Heatmap</label>
+    <span id="heat-scale"><span>low</span><span class="grad"></span><span>high</span></span>
     <button class="btn" id="btn-export" title="Download pin assignments &amp; bank utilization as CSV">&#11015; Export CSV</button>
   </div>
   <div id="gs"><div id="grid"></div></div>
@@ -193,6 +254,9 @@ var USED   = {"J15": {"signal": "led0_r", "iostandard": "LVCMOS33", "file": "Art
 var COLL   = {};
 var BANKS  = [{"bank": "14", "io_type": "HR", "total": 50, "used": 0}, {"bank": "15", "io_type": "HR", "total": 50, "used": 6}, {"bank": "34", "io_type": "HR", "total": 50, "used": 0}];
 var VCCO   = {};
+var NOSTD  = {};
+var POWER  = null;
+var PINPWR = {};
 var ROWS   = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "R", "T", "U", "V"];
 var COLS   = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 var COLORS = {"HR": "#4CAF50", "HP": "#2196F3", "HD": "#9C27B0", "CONFIG": "#FF9800", "GND": "#607D8B", "VCC": "#F44336", "NC": "#424242", "OTHER": "#9E9E9E"};
@@ -288,6 +352,95 @@ function toggleBankHighlight(bank, div) {
   }
 }
 
+// --- IO standard summary: every IOSTANDARD in use, with counts. Clicking a
+// row highlights all pins using that standard on the diagram. ---
+var stdListEl = document.getElementById('std-list');
+var activeStd = null;
+(function() {
+  var counts = {};
+  Object.keys(USED).forEach(function(loc) {
+    var s = USED[loc].iostandard || '--';
+    counts[s] = (counts[s] || 0) + 1;
+  });
+  var stds = Object.keys(counts).sort(function(a, b) {
+    return counts[b] - counts[a] || (a < b ? -1 : 1);
+  });
+  if (!stds.length) {
+    stdListEl.innerHTML = '<p class="ph">No assigned pins</p>';
+    return;
+  }
+  stds.forEach(function(s) {
+    var div = document.createElement('div');
+    div.className = 'std';
+    var name = (s === '--') ? '(no IOSTANDARD)' : s;
+    var v = iostdVcco(s);
+    div.innerHTML = '<span>' + escAttr(name) + (v ? ' <span style="color:var(--muted)">' + v + 'V</span>' : '') + '</span>' +
+                    '<span class="cnt"><b>' + counts[s] + '</b> pin' + (counts[s] === 1 ? '' : 's') + '</span>';
+    div.addEventListener('click', function() { toggleStdHighlight(s, div); });
+    stdListEl.appendChild(div);
+  });
+})();
+function toggleStdHighlight(std, div) {
+  var turningOn = activeStd !== std;
+  document.querySelectorAll('.std.std-active').forEach(function(e){ e.classList.remove('std-active'); });
+  document.querySelectorAll('.pin.stdhi').forEach(function(e){ e.classList.remove('stdhi'); });
+  if (turningOn) {
+    activeStd = std;
+    div.classList.add('std-active');
+    document.querySelectorAll('.pin').forEach(function(cell) {
+      var u = USED[cell.dataset.loc];
+      if (u && (u.iostandard || '--') === std) cell.classList.add('stdhi');
+    });
+  } else {
+    activeStd = null;
+  }
+}
+
+// --- Power summary panel, populated from the Vivado power report when one
+// was supplied on the command line (--power). ---
+(function() {
+  var el = document.getElementById('power');
+  if (!POWER) { el.style.display = 'none'; return; }
+  var s = POWER.summary || {};
+  function fmtW(w) {
+    return w >= 1 ? w.toFixed(3) + ' W' : (w * 1000).toFixed(w * 1000 >= 100 ? 0 : 1) + ' mW';
+  }
+  var html = '<h3>Power <span class="pw-src">' + escAttr(POWER.file || '') + '</span></h3>';
+  if (s.total !== undefined) {
+    html += '<div class="pw-total">' + escAttr(s.total) + ' W <small>total on-chip</small></div>';
+  }
+  var kv = [
+    ['Dynamic',     s.dynamic        !== undefined ? s.dynamic + ' W'        : null],
+    ['Static',      s.static         !== undefined ? s.static + ' W'         : null],
+    ['Junction',    s.junction_temp  !== undefined ? s.junction_temp + ' °C' : null],
+    ['Margin',      s.thermal_margin !== undefined ? s.thermal_margin + ' °C': null],
+    ['Max Ambient', s.max_ambient    !== undefined ? s.max_ambient + ' °C'   : null],
+    ['Confidence',  s.confidence     || null]
+  ].filter(function(p){ return p[1] !== null; });
+  if (kv.length) {
+    html += '<div class="pw-grid">' + kv.map(function(p) {
+      return '<span class="k">' + p[0] + '</span><span class="v">' + escAttr(p[1]) + '</span>';
+    }).join('') + '</div>';
+  }
+  var comps = (POWER.components || []).filter(function(c){ return c.power > 0; });
+  if (comps.length) {
+    var cmax = Math.max.apply(null, comps.map(function(c){ return c.power; }));
+    html += '<div class="pw-sec">On-Chip Components</div>' + comps.map(function(c) {
+      return '<div class="pw-comp"><div class="pw-comp-top"><span>' + escAttr(c.name) +
+        '</span><span style="color:var(--muted)">' + fmtW(c.power) + '</span></div>' +
+        '<div class="bar"><span style="width:' + (c.power / cmax * 100).toFixed(1) + '%"></span></div></div>';
+    }).join('');
+  }
+  if ((POWER.supplies || []).length) {
+    html += '<div class="pw-sec">Supply Rails</div>' + POWER.supplies.map(function(r) {
+      var amps = r.total_a && r.total_a !== 'NA' ? ' &middot; ' + escAttr(r.total_a) + ' A' : '';
+      return '<div class="pw-rail"><span class="rn">' + escAttr(r.source) + '</span>' +
+        '<span class="rv">' + escAttr(r.voltage) + ' V' + amps + '</span></div>';
+    }).join('');
+  }
+  el.innerHTML = html;
+})();
+
 // Build grid
 var grid = document.getElementById('grid');
 var hdr = mk('div','gr');
@@ -305,7 +458,7 @@ ROWS.forEach(function(r) {
     var isUsed = !!USED[loc];
     var isColl = !!COLL[loc];
     var color  = COLORS[data.color_key] || COLORS['OTHER'];
-    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':''),loc);
+    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':'')+(NOSTD[loc]?' nostd':''),loc);
     cell.style.background = color;
     cell.dataset.loc = loc;
     cell.addEventListener('mouseenter', (function(l,c){ return function(){ if (!locked) showDetail(l,c,false); }; })(loc,cell));
@@ -316,21 +469,49 @@ ROWS.forEach(function(r) {
   grid.appendChild(row);
 });
 
-// Dim mode
-var dimmed = false;
-document.getElementById('chk-dim').addEventListener('change', function(e) {
-  dimmed = e.target.checked; applyDim();
-});
-function applyDim() {
+// --- Pin coloring modes: unused-dimmed, color-by-bank, power heatmap. ---
+// One repaint pass keeps the modes composable; the heatmap takes precedence
+// over bank coloring, and dimming applies to whatever base color is active.
+var dimmed = false, bankColor = false, heatmap = false;
+
+// Largest per-pin power figure, used to normalize the heatmap scale.
+var PMAX = 0;
+Object.keys(PINPWR).forEach(function(l){ if (PINPWR[l] > PMAX) PMAX = PINPWR[l]; });
+function heatColor(w) {
+  // sqrt stretches the low end -- I/O power is usually clustered near zero.
+  var t = PMAX > 0 ? Math.sqrt(w / PMAX) : 0;
+  return 'hsl(' + (240 - 240 * t).toFixed(0) + ', 90%, 52%)';
+}
+function repaintPins() {
   document.querySelectorAll('.pin').forEach(function(cell) {
-    var d = PKG[cell.dataset.loc];
-    if (dimmed && IO_TYPES[d.color_key] && !USED[cell.dataset.loc]) {
-      cell.style.background = DIMMED;
-      cell.style.opacity    = '0.25';
+    var loc = cell.dataset.loc, d = PKG[loc];
+    var bg = COLORS[d.color_key] || COLORS['OTHER'], op = '1';
+    if (heatmap) {
+      if (PINPWR[loc] !== undefined) { bg = heatColor(PINPWR[loc]); }
+      else { bg = DIMMED; op = '0.3'; }
     } else {
-      cell.style.background = COLORS[d.color_key] || COLORS['OTHER'];
-      cell.style.opacity    = '1';
+      if (bankColor && d.bank && d.bank !== 'NA') bg = BANK_COLORS[d.bank] || bg;
+      if (dimmed && IO_TYPES[d.color_key] && !USED[loc]) { bg = DIMMED; op = '0.25'; }
     }
+    cell.style.background = bg;
+    cell.style.opacity    = op;
+  });
+}
+document.getElementById('chk-dim').addEventListener('change', function(e) {
+  dimmed = e.target.checked; repaintPins();
+});
+document.getElementById('chk-bankcol').addEventListener('change', function(e) {
+  bankColor = e.target.checked; repaintPins();
+});
+var chkHeat = document.getElementById('chk-heat');
+if (!Object.keys(PINPWR).length) {
+  // No per-port power data (report missing or non-verbose) -- hide the toggle.
+  document.getElementById('lbl-heat').style.display = 'none';
+} else {
+  chkHeat.addEventListener('change', function(e) {
+    heatmap = e.target.checked;
+    document.body.classList.toggle('heat-on', heatmap);
+    repaintPins();
   });
 }
 
@@ -411,6 +592,13 @@ function showDetail(loc, cell, isLocked) {
     rows.push(['Signal',      used.signal]);
     rows.push(['IO Standard', used.iostandard]);
   }
+  if (PINPWR[loc] !== undefined) {
+    var w = PINPWR[loc];
+    rows.push(['Est. Power', w >= 1 ? w.toFixed(3) + ' W' : (w * 1000).toFixed(2) + ' mW']);
+  }
+  if (NOSTD[loc]) {
+    rows.push(['⚠ No IOSTANDARD', 'Pin is assigned but has no IOSTANDARD — Vivado DRC NSTD-1 blocks bitstream generation.']);
+  }
   var coll = COLL[loc];
   if (coll) {
     rows.push(['⚠ Collision', coll.length + ' signals on this pin: ' + coll.join(', ')]);
@@ -435,6 +623,7 @@ function showDetail(loc, cell, isLocked) {
     else if (label === 'Pin' || label === 'Pin Name') { cls = 'copyable'; attr = ' data-copy="' + escAttr(val) + '"'; }
     else if (label.indexOf('Collision') !== -1) cls = 'warn';
     else if (label.indexOf('VCCO') !== -1) cls = 'warn volt';
+    else if (label.indexOf('No IOSTANDARD') !== -1) cls = 'warn nostd';
     else if (val === 'NA' || val === '--') cls = 'na';
     return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'"'+attr+'>'+val+'</div></div>';
   }).join('');
@@ -516,12 +705,14 @@ function csvCell(v) {
 function exportCSV() {
   var lines = [];
   lines.push('# Assigned pins');
-  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','XDC File'].map(csvCell).join(','));
+  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','Missing IOSTD','Power (mW)','XDC File'].map(csvCell).join(','));
   Object.keys(USED).sort().forEach(function(loc) {
     var d = PKG[loc] || {}, u = USED[loc];
     var vc = VCCO[d.bank] ? 'YES' : '';
+    var pw = PINPWR[loc] !== undefined ? (PINPWR[loc] * 1000).toFixed(3) : '';
     lines.push([loc, d.name, d.bank, d.io_type, u.signal, u.iostandard,
-                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc, u.file].map(csvCell).join(','));
+                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc,
+                NOSTD[loc] ? 'YES' : '', pw, u.file].map(csvCell).join(','));
   });
   lines.push('');
   lines.push('# Bank utilization (PL I/O)');

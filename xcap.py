@@ -9,8 +9,15 @@ The constraints argument may be either a single .xdc file or a directory.
 If a directory is given, it is searched recursively for all .xdc files and
 their constraints are merged together.
 
+Optionally, a Vivado power report (report_power text output) can be layered
+into the HTML with --power: the report's summary, on-chip component and
+supply-rail figures appear in the sidebar, and per-port I/O power (from a
+-verbose report) is attached to individual pins and drives a power heatmap
+display mode.
+
 Usage:
     xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+         [--power <power_report.txt>]
 
     (equivalently, when running from a source checkout:
      python xcap.py <package_data.txt> <constraints.xdc | xdc_dir/> [output.html])
@@ -20,8 +27,9 @@ import sys
 import re
 import os
 import json
+import argparse
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 PIN_COLORS = {
     "HR":     "#4CAF50",
@@ -363,8 +371,177 @@ def compute_bank_voltage_conflicts(pkg_pins, used_pins):
     return conflicts
 
 
+def compute_missing_iostandard(pkg_pins, used_pins):
+    """Return a sorted list of pin locations that are assigned a signal in the
+    XDC but carry no IOSTANDARD. Vivado's NSTD-1 DRC treats this as an error
+    that blocks bitstream generation, so it is surfaced on the diagram and in
+    the sidebar. Only PL SelectIO (HR/HP/HD) pins are considered."""
+    missing = []
+    for loc, u in used_pins.items():
+        d = pkg_pins.get(loc)
+        if not d or d["color_key"] not in PL_IO_TYPES:
+            continue
+        std = (u.get("iostandard") or "").strip().strip('"{}').upper()
+        if std in ("", "--", "NA", "NONE"):
+            missing.append(loc)
+    return sorted(missing)
+
+
+# ---------------------------------------------------------------------------
+# Vivado power report (report_power text output) parsing.
+#
+# The report is a sequence of ASCII tables delimited by '+----+' rules and
+# '|'-separated cells. Layouts vary between Vivado versions and between
+# summary/verbose reports, so instead of assuming section numbers the parser
+# scans every table and recognizes the interesting ones by their headers:
+#   - the key/value Summary table (Total On-Chip Power, Junction Temp, ...)
+#   - the On-Chip Components breakdown (Clocks, Logic, I/O, ...)
+#   - the Power Supply Summary (per-rail voltage/current)
+#   - any per-port I/O table (verbose reports), used to attach an estimated
+#     power figure to individual package pins.
+# ---------------------------------------------------------------------------
+
+_POWER_SUMMARY_KEYS = {
+    "total on-chip power (w)":  "total",
+    "dynamic (w)":              "dynamic",
+    "device static (w)":        "static",
+    "junction temperature (c)": "junction_temp",
+    "thermal margin (c)":       "thermal_margin",
+    "effective tja (c/w)":      "effective_tja",
+    "max ambient (c)":          "max_ambient",
+    "design power budget (w)":  "budget",
+    "power budget margin (w)":  "budget_margin",
+    "confidence level":         "confidence",
+}
+
+
+def _parse_power_value(cell):
+    """Parse a numeric cell from a power-report table. Vivado writes values
+    like '0.113', '<0.001' or '~0.5' as well as placeholders ('NA', '---',
+    'Unspecified'). Returns a float (in the table's unit) or None."""
+    s = cell.strip().lstrip("<~").rstrip("*").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _iter_power_tables(path):
+    """Yield each ASCII table in a Vivado report as a list of rows, each row
+    a list of stripped cell strings. '+----+' rules within a table (header
+    and footer separators) are ignored; any other line ends the table."""
+    table = []
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for raw in f:
+            s = raw.strip()
+            if s.startswith("|") and s.endswith("|") and len(s) > 1:
+                table.append([c.strip() for c in s[1:-1].split("|")])
+            elif s.startswith("+-") or s.startswith("+="):
+                continue
+            else:
+                if table:
+                    yield table
+                    table = []
+    if table:
+        yield table
+
+
+def _find_col(header, *needles):
+    """Index of the first header cell containing any needle, else None."""
+    for i, h in enumerate(header):
+        for n in needles:
+            if n in h:
+                return i
+    return None
+
+
+def parse_power_report(path):
+    """Best-effort parse of a Vivado ``report_power`` text report. Returns
+    ``{"file", "summary", "components", "supplies", "ports"}`` where ports
+    maps I/O port (signal) names to power in watts, or ``None`` if nothing
+    recognizable was found in the file."""
+    summary, components, supplies, ports = {}, [], [], {}
+    for table in _iter_power_tables(path):
+        header = [c.lower() for c in table[0]]
+
+        # Key/value summary table -- two columns, no header row.
+        if all(len(r) == 2 for r in table):
+            hit = False
+            for key, val in table:
+                field = _POWER_SUMMARY_KEYS.get(key.strip().lower())
+                if field:
+                    summary[field] = val.strip().rstrip("*").strip()
+                    hit = True
+            if hit:
+                continue
+
+        # Power Supply Summary: Source | Voltage (V) | Total (A) | ...
+        if header and header[0] == "source" and _find_col(header, "voltage") is not None:
+            vi = _find_col(header, "voltage")
+            ti = _find_col(header, "total")
+            di = _find_col(header, "dynamic")
+            si = _find_col(header, "static")
+            for row in table[1:]:
+                if len(row) <= vi or not row[0]:
+                    continue
+                def _cell(idx, _row=row):
+                    return _row[idx] if idx is not None and idx < len(_row) else ""
+                supplies.append({
+                    "source":    row[0],
+                    "voltage":   _cell(vi),
+                    "total_a":   _cell(ti),
+                    "dynamic_a": _cell(di),
+                    "static_a":  _cell(si),
+                })
+            continue
+
+        # On-Chip Components: On-Chip | Power (W) | Used | ...
+        if header and "on-chip" in header[0] and _find_col(header, "power") is not None:
+            pi = _find_col(header, "power")
+            for row in table[1:]:
+                if len(row) <= pi or not row[0] or row[0].lower() == "total":
+                    continue
+                p = _parse_power_value(row[pi])
+                if p is not None:
+                    components.append({"name": row[0], "power": p})
+            continue
+
+        # Per-port I/O table (verbose reports): first column names the port.
+        if header and _find_col(header, "power") is not None and (
+                header[0] in ("i/o", "signal", "signal name") or "port" in header[0]):
+            pi = _find_col(header, "power")
+            for row in table[1:]:
+                if len(row) <= pi or not row[0] or row[0].lower() == "total":
+                    continue
+                p = _parse_power_value(row[pi])
+                if p is not None:
+                    ports[row[0]] = p
+            continue
+
+    if not (summary or components or supplies or ports):
+        return None
+    return {"file": os.path.basename(path), "summary": summary,
+            "components": components, "supplies": supplies, "ports": ports}
+
+
+def match_port_power(used_pins, ports):
+    """Attach per-port power figures (from the report's I/O table) to package
+    pins by matching port names against XDC signal names, case-insensitively.
+    Returns ``{loc: watts}``."""
+    by_name = {name.strip().lower(): p for name, p in ports.items()}
+    pin_power = {}
+    for loc, u in used_pins.items():
+        # A colliding pin lists several signals joined by ", " -- try each.
+        for sig in u["signal"].split(", "):
+            p = by_name.get(sig.strip().lower())
+            if p is not None:
+                pin_power[loc] = p
+                break
+    return pin_power
+
+
 def generate_html(pkg_pins, used_pins, collisions, bank_util, vcco_conflicts,
-                  output_path, pkg_file, xdc_label):
+                  nostd, power, pin_power, output_path, pkg_file, xdc_label):
     rows, cols = infer_grid(pkg_pins)
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)
     n_used = sum(1 for p, d in pkg_pins.items()
@@ -376,6 +553,9 @@ def generate_html(pkg_pins, used_pins, collisions, bank_util, vcco_conflicts,
     js_coll   = json.dumps(collisions, ensure_ascii=False)
     js_banks  = json.dumps(bank_util, ensure_ascii=False)
     js_vcco   = json.dumps(vcco_conflicts, ensure_ascii=False)
+    js_nostd  = json.dumps({loc: 1 for loc in nostd}, ensure_ascii=False)
+    js_power  = json.dumps(power, ensure_ascii=False) if power else "null"
+    js_pinpwr = json.dumps(pin_power or {}, ensure_ascii=False)
     js_rows   = json.dumps(rows)
     js_cols   = json.dumps(cols)
     js_colors = json.dumps(PIN_COLORS)
@@ -412,7 +592,7 @@ html, body {
 .sb-hd { padding: 12px 14px; border-bottom: 1px solid var(--border); background: #111827cc; }
 .sb-hd h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; }
 .sb-hd .src { font-size: 10px; color: var(--muted); margin-top: 4px; word-break: break-all; }
-#detail { flex: 1; overflow-y: auto; padding: 12px 14px; }
+#detail { flex: 1; min-height: 130px; overflow-y: auto; padding: 12px 14px; }
 .ph { color: var(--muted); font-style: italic; font-size: 12px; margin-top: 8px; }
 .dr { margin-bottom: 11px; }
 .dl { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 2px; }
@@ -421,7 +601,7 @@ html, body {
     parts.append(USED_BORDER)
     parts.append("""; font-weight: 700; }
 .dv.na  { color: var(--muted); }
-#stats { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); line-height: 1.8; }
+#stats { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); line-height: 1.8; flex-shrink: 0; }
 #stats b { color: var(--text); }
 #legend { padding: 10px 14px 14px; border-top: 1px solid var(--border); }
 #legend h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 7px; }
@@ -470,7 +650,7 @@ body.show-lbl .pin { font-size: 6px; }
 .sw-coll { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
   background: transparent; border: 2px solid #ff3b30; }
 .dv.warn { color: #ff3b30; font-weight: 700; }
-#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 230px;
+#banks { border-top: 1px solid var(--border); padding: 10px 14px 4px; max-height: 160px;
   overflow-y: auto; }
 #banks h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
   color: var(--muted); margin-bottom: 8px; }
@@ -541,6 +721,58 @@ body.show-lbl .pin { font-size: 6px; }
 .sw-volt { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
   background: transparent; border: 2px solid #fbbf24; }
 .bk-warn { color: #fbbf24; font-weight: 700; margin-left: 5px; cursor: help; }
+
+/* --- Missing-IOSTANDARD (Vivado DRC NSTD-1) markers --- */
+.pin.nostd { border: 2px dashed #ff9f0a !important;
+  box-shadow: 0 0 7px #ff9f0a99 !important; }
+.pin.nostd:hover, .pin.nostd.hi { box-shadow: 0 0 13px #ff9f0a !important; }
+.sw-nostd { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 2px dashed #ff9f0a; }
+.dv.warn.nostd { color: #ff9f0a; }
+
+/* --- IO standard summary panel --- */
+#iostds { border-top: 1px solid var(--border); padding: 10px 14px 4px;
+  max-height: 110px; overflow-y: auto; }
+#iostds h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 7px; }
+.std { display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; padding: 3px 4px; margin: 0 -4px 2px; border-radius: 4px;
+  cursor: pointer; transition: background .1s; }
+.std:hover { background: #ffffff0d; }
+.std.std-active { background: #34d39922; box-shadow: inset 0 0 0 1px #34d39966; }
+.std .cnt { color: var(--muted); }
+.std .cnt b { color: var(--text); }
+.pin.stdhi { box-shadow: 0 0 0 2px #34d399, 0 0 9px #34d399 !important; z-index: 4; }
+
+/* --- Power summary panel (Vivado report_power) --- */
+#power { border-top: 1px solid var(--border); padding: 10px 14px;
+  max-height: 190px; overflow-y: auto; }
+#power h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 7px; }
+#power .pw-src { color: var(--muted); text-transform: none; letter-spacing: 0;
+  font-weight: 400; float: right; }
+.pw-total { font-size: 20px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.pw-total small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.pw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+  margin: 7px 0 4px; font-size: 11px; }
+.pw-grid .k { color: var(--muted); }
+.pw-grid .v { color: var(--text); font-weight: 600; text-align: right; }
+.pw-sec { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 8px 0 4px; }
+.pw-comp { margin-bottom: 4px; font-size: 11px; }
+.pw-comp .bar { margin-top: 2px; }
+.pw-comp .bar > span { background: #38bdf8; }
+.pw-comp-top { display: flex; justify-content: space-between; }
+.pw-rail { display: flex; justify-content: space-between; font-size: 11px;
+  margin-bottom: 3px; }
+.pw-rail .rn { color: var(--text); font-weight: 600; }
+.pw-rail .rv { color: var(--muted); }
+
+/* Power heatmap: legend gradient chip shown while the mode is active */
+#heat-scale { display: none; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+#heat-scale .grad { width: 90px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, hsl(240,90%,55%), hsl(120,90%,45%), hsl(0,90%,55%)); }
+body.heat-on #heat-scale { display: flex; }
 </style>
 </head>
 <body>
@@ -560,6 +792,11 @@ body.show-lbl .pin { font-size: 6px; }
     <h3>PL I/O Utilization by Bank</h3>
     <div id="bank-list"></div>
   </div>
+  <div id="iostds">
+    <h3>IO Standards in Use</h3>
+    <div id="std-list"></div>
+  </div>
+  <div id="power"></div>
   <div id="stats">
     PL I/O used: <b>""")
     parts.append(str(n_used))
@@ -576,6 +813,10 @@ body.show-lbl .pin { font-size: 6px; }
         parts.append("<br>&#9888; <b style=\"color:#fbbf24\">")
         parts.append(str(len(vcco_conflicts)))
         parts.append("</b> bank VCCO conflict(s)")
+    if nostd:
+        parts.append("<br>&#9888; <b style=\"color:#ff9f0a\">")
+        parts.append(str(len(nostd)))
+        parts.append("</b> pin(s) missing IOSTANDARD")
     parts.append("""
   </div>
   <div id="legend">
@@ -584,6 +825,7 @@ body.show-lbl .pin { font-size: 6px; }
     <div class="leg"><div class="sw-used"></div> Assigned in XDC</div>
     <div class="leg"><div class="sw-coll"></div> Pin collision</div>
     <div class="leg"><div class="sw-volt"></div> Bank VCCO conflict</div>
+    <div class="leg"><div class="sw-nostd"></div> Missing IOSTANDARD</div>
     <div class="leg" style="color:var(--muted);margin-top:6px;font-size:10px">Click a swatch to hide/show that type</div>
   </div>
 </div>
@@ -601,6 +843,9 @@ body.show-lbl .pin { font-size: 6px; }
     <label class="ck"><input type="checkbox" id="chk-dim"> Unused Pins Dimmed</label>
     <label class="ck"><input type="checkbox" id="chk-lbl"> Pin Labels</label>
     <label class="ck"><input type="checkbox" id="chk-bank"> Bank Labels</label>
+    <label class="ck"><input type="checkbox" id="chk-bankcol"> Color by Bank</label>
+    <label class="ck" id="lbl-heat"><input type="checkbox" id="chk-heat"> Power Heatmap</label>
+    <span id="heat-scale"><span>low</span><span class="grad"></span><span>high</span></span>
     <button class="btn" id="btn-export" title="Download pin assignments &amp; bank utilization as CSV">&#11015; Export CSV</button>
   </div>
   <div id="gs"><div id="grid"></div></div>
@@ -618,6 +863,12 @@ var PKG    = """)
     parts.append(js_banks)
     parts.append(";\nvar VCCO   = ")
     parts.append(js_vcco)
+    parts.append(";\nvar NOSTD  = ")
+    parts.append(js_nostd)
+    parts.append(";\nvar POWER  = ")
+    parts.append(js_power)
+    parts.append(";\nvar PINPWR = ")
+    parts.append(js_pinpwr)
     parts.append(";\nvar ROWS   = ")
     parts.append(js_rows)
     parts.append(";\nvar COLS   = ")
@@ -718,6 +969,95 @@ function toggleBankHighlight(bank, div) {
   }
 }
 
+// --- IO standard summary: every IOSTANDARD in use, with counts. Clicking a
+// row highlights all pins using that standard on the diagram. ---
+var stdListEl = document.getElementById('std-list');
+var activeStd = null;
+(function() {
+  var counts = {};
+  Object.keys(USED).forEach(function(loc) {
+    var s = USED[loc].iostandard || '--';
+    counts[s] = (counts[s] || 0) + 1;
+  });
+  var stds = Object.keys(counts).sort(function(a, b) {
+    return counts[b] - counts[a] || (a < b ? -1 : 1);
+  });
+  if (!stds.length) {
+    stdListEl.innerHTML = '<p class="ph">No assigned pins</p>';
+    return;
+  }
+  stds.forEach(function(s) {
+    var div = document.createElement('div');
+    div.className = 'std';
+    var name = (s === '--') ? '(no IOSTANDARD)' : s;
+    var v = iostdVcco(s);
+    div.innerHTML = '<span>' + escAttr(name) + (v ? ' <span style="color:var(--muted)">' + v + 'V</span>' : '') + '</span>' +
+                    '<span class="cnt"><b>' + counts[s] + '</b> pin' + (counts[s] === 1 ? '' : 's') + '</span>';
+    div.addEventListener('click', function() { toggleStdHighlight(s, div); });
+    stdListEl.appendChild(div);
+  });
+})();
+function toggleStdHighlight(std, div) {
+  var turningOn = activeStd !== std;
+  document.querySelectorAll('.std.std-active').forEach(function(e){ e.classList.remove('std-active'); });
+  document.querySelectorAll('.pin.stdhi').forEach(function(e){ e.classList.remove('stdhi'); });
+  if (turningOn) {
+    activeStd = std;
+    div.classList.add('std-active');
+    document.querySelectorAll('.pin').forEach(function(cell) {
+      var u = USED[cell.dataset.loc];
+      if (u && (u.iostandard || '--') === std) cell.classList.add('stdhi');
+    });
+  } else {
+    activeStd = null;
+  }
+}
+
+// --- Power summary panel, populated from the Vivado power report when one
+// was supplied on the command line (--power). ---
+(function() {
+  var el = document.getElementById('power');
+  if (!POWER) { el.style.display = 'none'; return; }
+  var s = POWER.summary || {};
+  function fmtW(w) {
+    return w >= 1 ? w.toFixed(3) + ' W' : (w * 1000).toFixed(w * 1000 >= 100 ? 0 : 1) + ' mW';
+  }
+  var html = '<h3>Power <span class="pw-src">' + escAttr(POWER.file || '') + '</span></h3>';
+  if (s.total !== undefined) {
+    html += '<div class="pw-total">' + escAttr(s.total) + ' W <small>total on-chip</small></div>';
+  }
+  var kv = [
+    ['Dynamic',     s.dynamic        !== undefined ? s.dynamic + ' W'        : null],
+    ['Static',      s.static         !== undefined ? s.static + ' W'         : null],
+    ['Junction',    s.junction_temp  !== undefined ? s.junction_temp + ' °C' : null],
+    ['Margin',      s.thermal_margin !== undefined ? s.thermal_margin + ' °C': null],
+    ['Max Ambient', s.max_ambient    !== undefined ? s.max_ambient + ' °C'   : null],
+    ['Confidence',  s.confidence     || null]
+  ].filter(function(p){ return p[1] !== null; });
+  if (kv.length) {
+    html += '<div class="pw-grid">' + kv.map(function(p) {
+      return '<span class="k">' + p[0] + '</span><span class="v">' + escAttr(p[1]) + '</span>';
+    }).join('') + '</div>';
+  }
+  var comps = (POWER.components || []).filter(function(c){ return c.power > 0; });
+  if (comps.length) {
+    var cmax = Math.max.apply(null, comps.map(function(c){ return c.power; }));
+    html += '<div class="pw-sec">On-Chip Components</div>' + comps.map(function(c) {
+      return '<div class="pw-comp"><div class="pw-comp-top"><span>' + escAttr(c.name) +
+        '</span><span style="color:var(--muted)">' + fmtW(c.power) + '</span></div>' +
+        '<div class="bar"><span style="width:' + (c.power / cmax * 100).toFixed(1) + '%"></span></div></div>';
+    }).join('');
+  }
+  if ((POWER.supplies || []).length) {
+    html += '<div class="pw-sec">Supply Rails</div>' + POWER.supplies.map(function(r) {
+      var amps = r.total_a && r.total_a !== 'NA' ? ' &middot; ' + escAttr(r.total_a) + ' A' : '';
+      return '<div class="pw-rail"><span class="rn">' + escAttr(r.source) + '</span>' +
+        '<span class="rv">' + escAttr(r.voltage) + ' V' + amps + '</span></div>';
+    }).join('');
+  }
+  el.innerHTML = html;
+})();
+
 // Build grid
 var grid = document.getElementById('grid');
 var hdr = mk('div','gr');
@@ -735,7 +1075,7 @@ ROWS.forEach(function(r) {
     var isUsed = !!USED[loc];
     var isColl = !!COLL[loc];
     var color  = COLORS[data.color_key] || COLORS['OTHER'];
-    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':''),loc);
+    var cell   = mk('div','pin'+(isUsed?' used':'')+(isColl?' collision':'')+(NOSTD[loc]?' nostd':''),loc);
     cell.style.background = color;
     cell.dataset.loc = loc;
     cell.addEventListener('mouseenter', (function(l,c){ return function(){ if (!locked) showDetail(l,c,false); }; })(loc,cell));
@@ -746,21 +1086,49 @@ ROWS.forEach(function(r) {
   grid.appendChild(row);
 });
 
-// Dim mode
-var dimmed = false;
-document.getElementById('chk-dim').addEventListener('change', function(e) {
-  dimmed = e.target.checked; applyDim();
-});
-function applyDim() {
+// --- Pin coloring modes: unused-dimmed, color-by-bank, power heatmap. ---
+// One repaint pass keeps the modes composable; the heatmap takes precedence
+// over bank coloring, and dimming applies to whatever base color is active.
+var dimmed = false, bankColor = false, heatmap = false;
+
+// Largest per-pin power figure, used to normalize the heatmap scale.
+var PMAX = 0;
+Object.keys(PINPWR).forEach(function(l){ if (PINPWR[l] > PMAX) PMAX = PINPWR[l]; });
+function heatColor(w) {
+  // sqrt stretches the low end -- I/O power is usually clustered near zero.
+  var t = PMAX > 0 ? Math.sqrt(w / PMAX) : 0;
+  return 'hsl(' + (240 - 240 * t).toFixed(0) + ', 90%, 52%)';
+}
+function repaintPins() {
   document.querySelectorAll('.pin').forEach(function(cell) {
-    var d = PKG[cell.dataset.loc];
-    if (dimmed && IO_TYPES[d.color_key] && !USED[cell.dataset.loc]) {
-      cell.style.background = DIMMED;
-      cell.style.opacity    = '0.25';
+    var loc = cell.dataset.loc, d = PKG[loc];
+    var bg = COLORS[d.color_key] || COLORS['OTHER'], op = '1';
+    if (heatmap) {
+      if (PINPWR[loc] !== undefined) { bg = heatColor(PINPWR[loc]); }
+      else { bg = DIMMED; op = '0.3'; }
     } else {
-      cell.style.background = COLORS[d.color_key] || COLORS['OTHER'];
-      cell.style.opacity    = '1';
+      if (bankColor && d.bank && d.bank !== 'NA') bg = BANK_COLORS[d.bank] || bg;
+      if (dimmed && IO_TYPES[d.color_key] && !USED[loc]) { bg = DIMMED; op = '0.25'; }
     }
+    cell.style.background = bg;
+    cell.style.opacity    = op;
+  });
+}
+document.getElementById('chk-dim').addEventListener('change', function(e) {
+  dimmed = e.target.checked; repaintPins();
+});
+document.getElementById('chk-bankcol').addEventListener('change', function(e) {
+  bankColor = e.target.checked; repaintPins();
+});
+var chkHeat = document.getElementById('chk-heat');
+if (!Object.keys(PINPWR).length) {
+  // No per-port power data (report missing or non-verbose) -- hide the toggle.
+  document.getElementById('lbl-heat').style.display = 'none';
+} else {
+  chkHeat.addEventListener('change', function(e) {
+    heatmap = e.target.checked;
+    document.body.classList.toggle('heat-on', heatmap);
+    repaintPins();
   });
 }
 
@@ -841,6 +1209,13 @@ function showDetail(loc, cell, isLocked) {
     rows.push(['Signal',      used.signal]);
     rows.push(['IO Standard', used.iostandard]);
   }
+  if (PINPWR[loc] !== undefined) {
+    var w = PINPWR[loc];
+    rows.push(['Est. Power', w >= 1 ? w.toFixed(3) + ' W' : (w * 1000).toFixed(2) + ' mW']);
+  }
+  if (NOSTD[loc]) {
+    rows.push(['⚠ No IOSTANDARD', 'Pin is assigned but has no IOSTANDARD — Vivado DRC NSTD-1 blocks bitstream generation.']);
+  }
   var coll = COLL[loc];
   if (coll) {
     rows.push(['⚠ Collision', coll.length + ' signals on this pin: ' + coll.join(', ')]);
@@ -865,6 +1240,7 @@ function showDetail(loc, cell, isLocked) {
     else if (label === 'Pin' || label === 'Pin Name') { cls = 'copyable'; attr = ' data-copy="' + escAttr(val) + '"'; }
     else if (label.indexOf('Collision') !== -1) cls = 'warn';
     else if (label.indexOf('VCCO') !== -1) cls = 'warn volt';
+    else if (label.indexOf('No IOSTANDARD') !== -1) cls = 'warn nostd';
     else if (val === 'NA' || val === '--') cls = 'na';
     return '<div class="dr"><div class="dl">'+label+'</div><div class="dv '+cls+'"'+attr+'>'+val+'</div></div>';
   }).join('');
@@ -946,12 +1322,14 @@ function csvCell(v) {
 function exportCSV() {
   var lines = [];
   lines.push('# Assigned pins');
-  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','XDC File'].map(csvCell).join(','));
+  lines.push(['Pin','Pin Name','Bank','I/O Type','Signal','IO Standard','VCCO (V)','Collision','VCCO Conflict','Missing IOSTD','Power (mW)','XDC File'].map(csvCell).join(','));
   Object.keys(USED).sort().forEach(function(loc) {
     var d = PKG[loc] || {}, u = USED[loc];
     var vc = VCCO[d.bank] ? 'YES' : '';
+    var pw = PINPWR[loc] !== undefined ? (PINPWR[loc] * 1000).toFixed(3) : '';
     lines.push([loc, d.name, d.bank, d.io_type, u.signal, u.iostandard,
-                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc, u.file].map(csvCell).join(','));
+                iostdVcco(u.iostandard), COLL[loc] ? 'YES' : '', vc,
+                NOSTD[loc] ? 'YES' : '', pw, u.file].map(csvCell).join(','));
   });
   lines.push('');
   lines.push('# Bank utilization (PL I/O)');
@@ -1030,23 +1408,30 @@ function mk(tag, cls, text) {
 
 
 def main():
-    args = sys.argv[1:]
+    ap = argparse.ArgumentParser(
+        prog="xcap",
+        description="Xilinx IO Capacity Visualization Tool -- generates an "
+                    "interactive HTML pin map from an AMD/Xilinx package data "
+                    "file and one or more Vivado .xdc constraints files.")
+    ap.add_argument("package_data",
+                    help="AMD/Xilinx package data file (e.g. from the package "
+                         "pinout documentation)")
+    ap.add_argument("constraints",
+                    help="a single .xdc file, or a directory searched "
+                         "recursively for .xdc files to merge")
+    ap.add_argument("output", nargs="?", default="pinmap.html",
+                    help="output HTML file (default: pinmap.html)")
+    ap.add_argument("-p", "--power", metavar="REPORT",
+                    help="Vivado report_power text report; its summary, rail "
+                         "and per-port figures are layered into the HTML "
+                         "(per-port power requires a -verbose report)")
+    ap.add_argument("-V", "--version", action="version",
+                    version="xcap " + __version__)
+    opts = ap.parse_args()
 
-    if args and args[0] in ("-V", "--version"):
-        print("xcap " + __version__)
-        sys.exit(0)
-
-    if not args or args[0] in ("-h", "--help"):
-        print(__doc__)
-        sys.exit(0 if args else 1)
-
-    if len(args) < 2:
-        print(__doc__)
-        sys.exit(1)
-
-    pkg_file = args[0]
-    xdc_path = args[1]
-    out_file = args[2] if len(args) > 2 else "pinmap.html"
+    pkg_file = opts.package_data
+    xdc_path = opts.constraints
+    out_file = opts.output
 
     print("Parsing package data : " + pkg_file)
     pkg_pins = parse_package_data(pkg_file)
@@ -1091,9 +1476,41 @@ def main():
             volts = ", ".join(v + "V" for v in sorted(vcco_conflicts[bank]["voltages"]))
             print("    - Bank " + bank + ": " + volts)
 
+    nostd = compute_missing_iostandard(pkg_pins, used_pins)
+    if nostd:
+        print("  WARNING: " + str(len(nostd)) +
+              " assigned pin(s) missing IOSTANDARD (Vivado DRC NSTD-1): " +
+              ", ".join(nostd))
+
+    power, pin_power = None, {}
+    if opts.power:
+        print("Parsing power report : " + opts.power)
+        power = parse_power_report(opts.power)
+        if power is None:
+            print("  WARNING: no recognizable power data found in '" +
+                  opts.power + "' -- is it a report_power text report?")
+        else:
+            s = power["summary"]
+            if "total" in s:
+                line = "  -> total on-chip power: " + s["total"] + " W"
+                if "dynamic" in s and "static" in s:
+                    line += (" (dynamic " + s["dynamic"] + " W, static " +
+                             s["static"] + " W)")
+                print(line)
+            if "junction_temp" in s:
+                print("  -> junction temperature: " + s["junction_temp"] + " C")
+            pin_power = match_port_power(used_pins, power["ports"])
+            if power["ports"]:
+                print("  -> " + str(len(power["ports"])) +
+                      " per-port I/O power value(s), " + str(len(pin_power)) +
+                      " matched to assigned pins")
+            else:
+                print("  -> no per-port I/O table found (run report_power "
+                      "with -verbose for the per-pin heatmap)")
+
     print("Generating HTML      : " + out_file)
     generate_html(pkg_pins, used_pins, collisions, bank_util, vcco_conflicts,
-                  out_file, pkg_file, xdc_label)
+                  nostd, power, pin_power, out_file, pkg_file, xdc_label)
 
     n_io   = sum(1 for d in pkg_pins.values()  if d["color_key"] in PL_IO_TYPES)
     n_used = sum(1 for p, d in pkg_pins.items()

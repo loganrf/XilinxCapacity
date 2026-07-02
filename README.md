@@ -49,7 +49,7 @@ xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
 Once installed, invoke the tool as a terminal command from anywhere:
 
 ```
-xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html]
+xcap <package_data.txt> <constraints.xdc | xdc_dir/> [output.html] [--power <report.txt>]
 ```
 
 Or, running directly from a source checkout:
@@ -62,12 +62,16 @@ Use `xcap --help` for usage and `xcap --version` to print the version.
 
 The constraints argument may be either a single `.xdc` file or a directory; if a directory is given it is searched recursively and all `.xdc` files are merged.
 
+The optional `--power` (`-p`) argument takes a Vivado power report and layers its data into the HTML — see [Vivado power report integration](#vivado-power-report-integration).
+
 ## Display modes
 
 The user can select different display modes via checkboxes at the top of the display:
 - **All Pins** (default): All pins are color coded by their pin type (similar to how Xilinx's package documentation shows them).
 - **Unused Pins Dimmed**: Only used pins are colored per the same scheme; all others are a dim grey.
 - **Pin Labels** / **Bank Labels**: Overlay each pin with its package location or its bank number.
+- **Color by Bank**: Recolor every pin with its bank's unique color (the same colors used for bank labels), making the physical bank regions of the package visible at a glance. Combines with *Unused Pins Dimmed*.
+- **Power Heatmap** (shown when per-pin power data is available, see below): Color each assigned pin on a blue→green→red scale by its estimated I/O power from the Vivado power report; all other pins are dimmed.
 
 ## Interacting with the diagram
 
@@ -76,6 +80,7 @@ The user can select different display modes via checkboxes at the top of the dis
 - When a pin is selected, its **differential-pair partner** (the matching `L##P`/`L##N` pin in the same bank) is ringed in cyan and listed in the detail panel.
 - **Click `Pin`, `Pin Name`, or `Signal`** in the detail panel to copy that value to the clipboard.
 - **Click a bank** in the "PL I/O Utilization by Bank" list to highlight every pin in that bank on the diagram. Click again to clear.
+- **Click an IO standard** in the "IO Standards in Use" list to highlight every pin assigned with that standard. The list shows each IOSTANDARD found in the XDC with its derived VCCO voltage and pin count — a quick way to audit the voltage domains your design actually uses.
 - **Click a legend swatch** to hide/show that whole pin class on the diagram.
 
 ## Search & filter
@@ -84,14 +89,31 @@ A search box in the toolbar filters the diagram live. Type any pin location, sig
 
 ## Design-rule checks
 
-The tool flags two classes of real Vivado constraint errors directly on the diagram and in the sidebar:
+The tool flags three classes of real Vivado constraint errors directly on the diagram and in the sidebar:
 
 - **Pin collisions** — the same `PACKAGE_PIN` assigned to more than one distinct signal (red ring).
 - **Bank VCCO conflicts** — signals within a single I/O bank whose `IOSTANDARD`s demand different VCCO rail voltages (e.g. `LVCMOS33` at 3.3 V and `SSTL135` at 1.35 V in the same bank). Because a bank has one VCCO supply, such a mix cannot be routed; affected banks are marked with a ⚠ in the bank list and detailed when you inspect an offending pin.
+- **Missing IOSTANDARD** — a pin assigned a signal but no `IOSTANDARD` (dashed orange ring). Vivado's NSTD-1 DRC treats this as an error that blocks bitstream generation, so it's worth catching at constraints-review time.
+
+All three are also reported as warnings on the console when the report is generated.
+
+## Vivado power report integration
+
+Pass a Vivado `report_power` text report with `--power` to layer power data into the pin map:
+
+```
+# in Vivado (post-implementation):
+#   report_power -verbose -file power.txt
+xcap package_data.txt constraints.xdc pinmap.html --power power.txt
+```
+
+- A **Power** sidebar panel shows the report's headline figures (total on-chip power, dynamic/static split, junction temperature, thermal margin, confidence level), a bar breakdown of the **on-chip components** (clocks, logic, I/O, ...), and the **supply rail summary** (voltage and current per rail).
+- With a `-verbose` report, the per-port I/O power table is matched against your XDC signal names: each matched pin shows an **Est. Power** figure in its detail panel, gains a **Power (mW)** column in the CSV export, and drives the **Power Heatmap** display mode.
+- The parser is tolerant of Vivado version differences — it recognizes the report's tables by their headers rather than by section numbers, and anything it can't recognize is simply skipped. Without a verbose report the heatmap toggle is hidden and the summary panel still works.
 
 ## Export
 
-The **Export CSV** button downloads a `pinmap_report.csv` containing every assigned pin (with its bank, IO standard, derived VCCO voltage, and collision/conflict flags) plus the per-bank PL I/O utilization summary — handy for spreadsheets, reviews, or diffing between builds.
+The **Export CSV** button downloads a `pinmap_report.csv` containing every assigned pin (with its bank, IO standard, derived VCCO voltage, collision/conflict/missing-IOSTANDARD flags, and estimated power when a power report was supplied) plus the per-bank PL I/O utilization summary — handy for spreadsheets, reviews, or diffing between builds.
 
 ## Releasing
 

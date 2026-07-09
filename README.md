@@ -1,5 +1,7 @@
 # Xilinx IO Capacity Visualization Tool
 
+==This app is AI generated. Use at your own risk.==
+
 This script can be used to synthesize an interactive pin map of your AMD/Xilinx FPGA using a combination of the package data file (provided by AMD) and your custom .xdc.
 
 The script generates a html webpage in the output directory that can be opened with your browser (chrome recommended). This HTML page consists of two sections: the lefthand sidebar and main display. The main display shows the pinout diagram (note: this tool assumes a uniform square pinout structure with letter codes indicating rows and numbers indicating columns).
